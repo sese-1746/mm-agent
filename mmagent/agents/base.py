@@ -159,14 +159,19 @@ class RoleRunner:
             json.dumps(messages, ensure_ascii=False).encode("utf-8")).hexdigest()[:16]
         run_id = uuid.uuid4().hex
         last_err: Exception | None = None
+        last_excerpt = ""
 
         for model_tag, temperature in chain:
             start = time.monotonic()
+            raw = ""
             try:
                 raw = self.client.chat(model_tag, messages,
                                        temperature=temperature, format="json",
                                        num_predict=self.max_tokens)
-                obj = json.loads(strip_code_fence(raw))
+                # strict=False：容忍字符串值里的**裸控制字符（尤其真实换行）**。
+                # 实测（task-003）qwen3.5 生成 code 字段时会间歇性把 "\n" 写成真实换行，
+                # 严格解析直接 JSONDecodeError → 整个链路失败；这属于可无损容忍的格式噪声。
+                obj = json.loads(strip_code_fence(raw), strict=False)
                 if not isinstance(obj, dict):
                     raise ValueError("输出不是 JSON 对象")
                 missing = _validate_required(obj, self.schema)
@@ -177,7 +182,13 @@ class RoleRunner:
                 return obj
             except Exception as exc:  # 网络/解析/校验失败均进下一档
                 last_err = exc
+                # 保留原始输出片段：否则 JSON/解析类故障只留一句报错，无法定位
+                if raw:
+                    last_excerpt = raw[:500]
                 self._record(f"ollama/{model_tag}", input_hash,
                              round((time.monotonic() - start) * 1000, 1), run_id, False)
+        detail = f"{last_err}"
+        if last_excerpt:
+            detail += f"\n原始输出片段（前 500 字符）：{last_excerpt!r}"
         raise LLMCallError(
-            f"角色 {self.role}（{self.prompt_version}）调用失败（含降级）：{last_err}")
+            f"角色 {self.role}（{self.prompt_version}）调用失败（含降级）：{detail}")

@@ -3,7 +3,8 @@
 规则（import 白名单 + 危险调用黑名单）：
 - **import 白名单**（只放行以下顶层模块，其余一律拦截）：
   pandas / numpy / matplotlib / math / json / csv / sqlite3 / pathlib /
-  statistics / itertools / collections / datetime / re / random
+  statistics / itertools / collections / datetime / re / random /
+  **xlrd / openpyxl**（`.xls`/`.xlsx` 解析）
 - **危险调用黑名单**（裸名）：eval / exec / __import__ / compile
 - **危险调用黑名单**（属性调用）：os.system、os.popen、subprocess.*、
   importlib.import_module（动态导入绕过）
@@ -13,17 +14,27 @@
 `from os import system; system("dir")` 不含 `os.system` 属性调用即被漏放；
 `importlib.import_module("subprocess")` 不含 `import subprocess` 语句亦被漏放。
 改为白名单后，`os`/`importlib`/`httpx` 等顶层名不在白名单即被拒绝。
+
+`os` 属**刻意整块禁止**（不是遗漏）：白名单的核心收益就是无法靠"换成员名"绕过，
+连 `os.makedirs` 这类无害成员也一律拒绝——建目录请用
+`pathlib.Path(...).mkdir(parents=True, exist_ok=True)`。
+
+修订记录：
+- 2026-10-14（task-003）：白名单补入 `xlrd`/`openpyxl`。原白名单漏收 `.xls` 解析库，
+  造成「提示词要求用 xlrd、守卫却禁止 import xlrd」，FR-5 读附件任务在结构上无法通过守卫。
+  二者均为纯本地文件解析库，无网络/无执行能力，与守卫目的（零外网 + 无危险调用）不冲突。
 违规抛 ScriptGuardError（携带全部违规点）。
 """
 from __future__ import annotations
 
 import ast
 
-# 只允许 import 这些顶层模块（脚本建模/绘图够用，且无外网/执行能力）
+# 只允许 import 这些顶层模块（脚本建模/绘图/读附件够用，且无外网/执行能力）
 ALLOWED_IMPORTS = {
     "pandas", "numpy", "matplotlib", "math", "json", "csv", "sqlite3",
     "pathlib", "statistics", "itertools", "collections", "datetime",
     "re", "random",
+    "xlrd", "openpyxl",  # 读 附件1~6(.xls) 与 总表(.xlsx) —— FR-5 任务本体需要
 }
 # 显式点名禁止的顶层模块（即便拼写靠近白名单也拒绝；作为白名单的补网）
 BANNED_IMPORTS = {
@@ -34,6 +45,8 @@ BANNED_CALLS = {  # 裸名调用
     "eval", "exec", "__import__", "compile",
 }
 BANNED_ATTR_CALLS = {  # 属性调用（模块.函数）——防绕过
+    # 注：`os` 目前已在 BANNED_IMPORTS 中整块禁止，故下列 os.* 规则当前**不可达**；
+    # 保留为纵深防御：一旦将来有人把 os 放进白名单，这些危险成员仍会被拦住。
     ("os", "system"), ("os", "popen"), ("os", "execv"), ("os", "spawnv"),
     ("subprocess", "run"), ("subprocess", "call"),
     ("subprocess", "Popen"), ("subprocess", "check_output"),

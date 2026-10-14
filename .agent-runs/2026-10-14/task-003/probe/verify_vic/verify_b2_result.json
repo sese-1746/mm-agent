@@ -1,0 +1,67 @@
+{
+  "B2a_samples": [
+    {
+      "model": "qwen3.5:latest",
+      "num_predict": 8192,
+      "done_reason": "stop",
+      "eval_count": 1528,
+      "content_chars": 3920,
+      "endswith_brace": true,
+      "json_parse": "OK",
+      "code_chars": 3349
+    },
+    {
+      "model": "qwen3.5:latest",
+      "num_predict": 8192,
+      "done_reason": "stop",
+      "eval_count": 1145,
+      "content_chars": 3405,
+      "endswith_brace": true,
+      "json_parse": "OK",
+      "code_chars": 2849
+    },
+    {
+      "model": "qwen3.5:latest",
+      "num_predict": 8192,
+      "done_reason": "stop",
+      "eval_count": 1146,
+      "content_chars": 3224,
+      "endswith_brace": true,
+      "json_parse": "OK",
+      "code_chars": 2675
+    }
+  ],
+  "B2c_fallback_samples": [
+    {
+      "model": "qwen3.5:0.8b",
+      "num_predict": 8192,
+      "done_reason": "stop",
+      "eval_count": 491,
+      "content_chars": 1445,
+      "endswith_brace": true,
+      "json_parse": "OK",
+      "code_chars": 1024
+    },
+    {
+      "model": "qwen3.5:0.8b",
+      "num_predict": 8192,
+      "done_reason": "stop",
+      "eval_count": 483,
+      "content_chars": 1420,
+      "endswith_brace": true,
+      "json_parse": "OK",
+      "code_chars": 1024
+    }
+  ],
+  "B2b_real_regen": [
+    {
+      "ok": true,
+      "out_chars": 2291
+    },
+    {
+      "ok": true,
+      "out_chars": 2288
+    }
+  ],
+  "truncated_count": 0
+}

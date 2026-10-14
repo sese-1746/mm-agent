@@ -204,16 +204,25 @@ def test_guard_白名单化后常用本地库仍须放行():
 
 # ------------------------------------------------------------------ runner 正常路径
 
-def test_runner_正常脚本_返回码0且ok为真(tmp_path):
+def test_runner_未声明manifest的脚本不算成功(tmp_path):
+    """task-003 修订：manifest.json 属 coder 契约（「产物必须在 manifest.json 里声明」），
+    未产出即不得判 ok=True。
+
+    原断言 `ok is True` / `manifest_missing == []` 把**假阳性语义**固化了：
+    原实现只在 manifest 存在时才统计缺失文件，于是脚本「什么都没产出」时
+    manifest_missing 为空 → ok=True —— rc==0 但零产物被报成功，正是要消灭的静默错误。
+    本条为**加强**断言（未声明产物必须判失败），非放宽。
+    """
     workdir = tmp_path / "wd"
     script = _write_script(tmp_path / "scripts", "ok_script.py", OK_SCRIPT)
 
     report = run_script(script, workdir, timeout_s=60)
 
-    assert report["returncode"] == 0
-    assert report["ok"] is True
+    assert report["returncode"] == 0, "脚本本身没崩"
     assert report["timed_out"] is False
-    assert report["manifest_missing"] == []
+    assert report["manifest_present"] is False
+    assert report["ok"] is False, "未声明产物的脚本不得判成功（防零产物假成功）"
+    assert report["manifest_missing"], "应说明 manifest.json 缺失"
 
 
 def test_runner_正常脚本_产出文件被列出(tmp_path):
@@ -245,7 +254,9 @@ def test_runner_返回报告包含全部约定键(tmp_path):
 
     assert set(report) == {"returncode", "ok", "timed_out", "stdout_tail",
                            "stderr_tail", "duration_s", "produced_files",
-                           "manifest_missing"}
+                           "manifest_missing",
+                           # task-003 新增：显式暴露 manifest 是否存在（ok 判定依赖它）
+                           "manifest_present"}
 
 
 def test_runner_脚本在workdir下执行(tmp_path):

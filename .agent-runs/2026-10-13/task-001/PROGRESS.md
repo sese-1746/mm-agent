@@ -274,3 +274,36 @@ cd H:\mm-agent && .venv\Scripts\python.exe -m pytest tests -q
 - **`README.md` = `361afccc9e0d0262604d5c4887ff454a`**（其余 7 项沿用 §1）。
 - 其余 7 个源文件（含 `schema.sql`）一字未改 → task-001 的 FR-2 / FR-5 / FR-6 / FR-9 / NFR-2 / NFR-7 冻结语义不受影响。
 - 本节由 task-002 收尾（Phase 4 独立验证）追加；task-002 已提交（commit 见 task-002 `final-summary.md`）。
+
+---
+
+## 11. task-003 后冻结基线再次更新（2026-10-14 追加，未改动上文）
+
+> task-003（FR-5 端到端可运行率）修了一个**使任务在结构上无法通过**的守卫缺陷，`guard.py` 因此变更。
+
+### 11.1 变更项
+
+| 文件 | 原基线 md5 | 现 md5 | 判定 |
+|---|---|---|---|
+| `mmagent/pipeline/guard.py` | `7bf8d6bf77b805594a2c1cb1b1de52a6` | **`00f172c113637251ea4bcf3e4269e4cd`** | ⚠️ **有意变更** |
+| 其余 7 项（schema.sql / db.py / intake.py / sanity.py / 两个 yaml / README.md） | 见 §1、§10 | **一字未变** | ✅ |
+
+### 11.2 为何必须改 `guard.py`
+
+原白名单 `ALLOWED_IMPORTS` **不含 `xlrd`/`openpyxl`**，而 FR-5 的任务本体就是读 `附件1~6`（`.xls`），
+提示词还明确教模型「读 .xls 用 xlrd」→ **提示词与守卫互相打架，任务在结构上不可能通过守卫**（实测 6/6 全部在生成阶段被拦）。
+这是 task-001 把守卫从黑名单改白名单（为堵 `from os import system` 绕过）时**白名单收得过窄**造成的回归。
+
+**处置**：白名单补入 `xlrd`、`openpyxl`（纯本地文件解析库，无网络/无执行能力，不违背"零外网"目的）；
+**`os` 保留整块禁令**（`tests/test_fr5_guard_runner.py` 明确断言"即便只用 `os.makedirs` 也一律拒绝"，
+可用 `pathlib` 替代），并在 docstring 注明该禁令是刻意为之、`BANNED_ATTR_CALLS` 里的 `os.*` 属纵深防御。
+
+### 11.3 本次同步变更但**不在**冻结基线内的文件
+
+`mmagent/pipeline/runner.py`（`ok` 判定补 `manifest_present` 前置 + 新增同名字段）、
+`mmagent/agents/base.py`（`json.loads(..., strict=False)` + 失败时保留原始输出片段）、
+`mmagent/agents/coder.py`（补 `make_regen_fn`）、`mmagent/tools/solve_tool.py`（新增 `stage_inputs` / `table_schema_digest`）、
+`mmagent/agents/prompts/coder.system.j2`（修正 `cell_value` 事实错误、禁吞异常、告知沙箱白名单、表头行规则）、
+`tests/test_fr5_guard_runner.py`（2 处断言**加强**：零产物必须判失败；报告键集纳入 `manifest_present`）。
+
+**回归**：全量 `pytest tests -q` = **253 passed / 1 xfailed / 0 failed**（与改动前一致，无回归）。

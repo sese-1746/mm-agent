@@ -38,11 +38,15 @@ def run_script(script_path: str | Path, workdir: str | Path,
         stderr += f"\n[runner] 超时 {timeout_s}s，进程已终止"
     duration = round(time.monotonic() - start, 3)
 
-    # manifest 校验（若脚本产出 manifest.json）
+    # manifest 校验：manifest.json 是 coder 契约的一部分（「产物必须在 manifest.json 里声明」），
+    # 故**未产出 manifest 的脚本不得判成功**。
+    # task-003 修订：原实现只在 manifest 存在时才算 manifest_missing，导致「脚本什么都没产出」
+    # 时 manifest_missing 为空 → ok=True 的假阳性（rc==0 但零产物被报成功）—— 正是要消灭的静默错误。
     manifest_files: list[str] = []
     manifest_missing: list[str] = []
     manifest_path = workdir / "manifest.json"
-    if manifest_path.exists():
+    manifest_present = manifest_path.exists()
+    if manifest_present:
         try:
             manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
             manifest_files = list(manifest.get("files", []))
@@ -50,8 +54,10 @@ def run_script(script_path: str | Path, workdir: str | Path,
                                 if not (workdir / f).exists()]
         except (json.JSONDecodeError, OSError) as exc:
             manifest_missing = [f"<manifest 解析失败: {exc}>"]
+    else:
+        manifest_missing = ["manifest.json（脚本未按契约声明产物，无法确认是否真的产出）"]
 
-    ok = (not timed_out) and returncode == 0 and not manifest_missing
+    ok = (not timed_out) and returncode == 0 and manifest_present and not manifest_missing
     return {
         "returncode": returncode,
         "ok": ok,
@@ -61,6 +67,7 @@ def run_script(script_path: str | Path, workdir: str | Path,
         "duration_s": duration,
         "produced_files": manifest_files if manifest_files else _scan_outputs(workdir),
         "manifest_missing": manifest_missing,
+        "manifest_present": manifest_present,
     }
 
 

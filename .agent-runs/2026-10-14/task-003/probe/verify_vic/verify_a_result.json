@@ -1,0 +1,257 @@
+{
+  "A2_sets": {
+    "ALLOWED": [
+      "collections",
+      "csv",
+      "datetime",
+      "itertools",
+      "json",
+      "math",
+      "matplotlib",
+      "numpy",
+      "openpyxl",
+      "pandas",
+      "pathlib",
+      "random",
+      "re",
+      "sqlite3",
+      "statistics",
+      "xlrd"
+    ],
+    "BANNED": [
+      "ftplib",
+      "http",
+      "httpx",
+      "importlib",
+      "os",
+      "pty",
+      "requests",
+      "shutil",
+      "signal",
+      "socket",
+      "subprocess",
+      "sys",
+      "urllib",
+      "urllib3"
+    ],
+    "intersection": [],
+    "banned_not_in_allowed": [
+      "ftplib",
+      "http",
+      "httpx",
+      "importlib",
+      "os",
+      "pty",
+      "requests",
+      "shutil",
+      "signal",
+      "socket",
+      "subprocess",
+      "sys",
+      "urllib",
+      "urllib3"
+    ],
+    "allowed_not_banned": [
+      "collections",
+      "csv",
+      "datetime",
+      "itertools",
+      "json",
+      "math",
+      "matplotlib",
+      "numpy",
+      "openpyxl",
+      "pandas",
+      "pathlib",
+      "random",
+      "re",
+      "sqlite3",
+      "statistics",
+      "xlrd"
+    ],
+    "dangerous_top_level_in_allowed": [],
+    "banned_calls": [
+      "__import__",
+      "compile",
+      "eval",
+      "exec"
+    ],
+    "banned_attr_calls": [
+      "importlib.import_module",
+      "os.execv",
+      "os.popen",
+      "os.spawnv",
+      "os.system",
+      "subprocess.Popen",
+      "subprocess.call",
+      "subprocess.check_output",
+      "subprocess.run"
+    ]
+  },
+  "A3_runner": [
+    {
+      "name": "rc=0 且无 manifest",
+      "rc": 0,
+      "ok": false,
+      "manifest_present": false,
+      "manifest_missing": [
+        "manifest.json（脚本未按契约声明产物，无法确认是否真的产出）"
+      ],
+      "produced_files": [
+        "result.csv"
+      ],
+      "timed_out": false
+    },
+    {
+      "name": "rc=0 且 manifest 齐全",
+      "rc": 0,
+      "ok": true,
+      "manifest_present": true,
+      "manifest_missing": [],
+      "produced_files": [
+        "out/f.csv"
+      ],
+      "timed_out": false
+    },
+    {
+      "name": "rc=0 且 manifest 缺件",
+      "rc": 0,
+      "ok": false,
+      "manifest_present": true,
+      "manifest_missing": [
+        "out/never.csv"
+      ],
+      "produced_files": [
+        "out/never.csv"
+      ],
+      "timed_out": false
+    },
+    {
+      "name": "rc!=0 崩溃(无 manifest)",
+      "rc": 1,
+      "ok": false,
+      "manifest_present": false,
+      "manifest_missing": [
+        "manifest.json（脚本未按契约声明产物，无法确认是否真的产出）"
+      ],
+      "produced_files": [],
+      "timed_out": false
+    }
+  ],
+  "A4_stage_inputs": {
+    "cjk_staged_return": [
+      "data/att1.xls"
+    ],
+    "cjk_file_exists": [
+      "True"
+    ],
+    "ascii_kept": [
+      "data/already_ascii.xls"
+    ],
+    "missing_raises": true
+  },
+  "A5_regen": {
+    "regen_return_type": "str",
+    "regen_return": "print('new')",
+    "captured_payload_keys": [
+      "inputs",
+      "prev_code",
+      "prev_error"
+    ],
+    "prev_code_in_payload": "print('old')\n# 上一版完整源码\n",
+    "prev_code_equals_old_src": true,
+    "inputs_preserved": [
+      "data/att1.xls"
+    ],
+    "prev_error_has_context": true,
+    "solve_tool_imports": [
+      "__future__",
+      "json",
+      "shutil",
+      "pathlib",
+      "typing",
+      "pipeline"
+    ],
+    "solve_tool_imports_agents": []
+  },
+  "A1_guard_matrix": {
+    "import xlrd": {
+      "verdict": "PASS",
+      "violations": []
+    },
+    "import openpyxl": {
+      "verdict": "PASS",
+      "violations": []
+    },
+    "import os": {
+      "verdict": "BLOCK",
+      "violations": [
+        "第1行：禁止 import os（os 在禁止名单）"
+      ]
+    },
+    "from os import system; system('dir')": {
+      "verdict": "BLOCK",
+      "violations": [
+        "第1行：禁止 import from os import ...（os 在禁止名单）"
+      ]
+    },
+    "import importlib": {
+      "verdict": "BLOCK",
+      "violations": [
+        "第1行：禁止 import importlib（importlib 在禁止名单）"
+      ]
+    },
+    "importlib.import_module('subprocess')": {
+      "verdict": "BLOCK",
+      "violations": [
+        "第1行：禁止 import importlib（importlib 在禁止名单）",
+        "第2行：禁止调用 importlib.import_module()"
+      ]
+    },
+    "import subprocess": {
+      "verdict": "BLOCK",
+      "violations": [
+        "第1行：禁止 import subprocess（subprocess 在禁止名单）"
+      ]
+    },
+    "import httpx": {
+      "verdict": "BLOCK",
+      "violations": [
+        "第1行：禁止 import httpx（httpx 在禁止名单）"
+      ]
+    },
+    "import http.client": {
+      "verdict": "BLOCK",
+      "violations": [
+        "第1行：禁止 import http.client（http 在禁止名单）"
+      ]
+    },
+    "eval('1')": {
+      "verdict": "BLOCK",
+      "violations": [
+        "第1行：禁止调用 eval()"
+      ]
+    },
+    "os.system (先 import os)": {
+      "verdict": "BLOCK",
+      "violations": [
+        "第1行：禁止 import os（os 在禁止名单）",
+        "第2行：禁止调用 os.system()"
+      ]
+    },
+    "干净脚本 pandas+matplotlib": {
+      "verdict": "PASS",
+      "violations": []
+    },
+    "openpyxl 后跟 os.system": {
+      "verdict": "BLOCK",
+      "violations": [
+        "第2行：禁止调用 os.system()"
+      ]
+    },
+    "from xlrd import open_workbook": {
+      "verdict": "PASS",
+      "violations": []
+    }
+  }
+}

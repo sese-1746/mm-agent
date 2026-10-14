@@ -1,0 +1,24 @@
+[
+  {
+    "mode": "cjk",
+    "idx": 0,
+    "inputs": [
+      "data/附件1 各门店客户满意度综合得分-A题.xls"
+    ],
+    "ok": false,
+    "kind": "exception",
+    "exception": "LLMCallError: 角色 coder（coder@1.0.0）调用失败（含降级）：Unterminated string starting at: line 6 column 11 (char 199)\n原始输出片段（前 500 字符）：'{\\n  \"module\": \"xlsx_reader\",\\n  \"filename\": \"solve.py\",\\n  \"purpose\": \"读取 Excel 97-2003 格式 xls 文件，提取数据并绘制各门店月度满意度折线图，保存至 figures/目录\",\\n  \"declared_outputs\": [\"figures/satisfaction_line.png\"],\\n  \"code\": \"import matplotlib\\\\nmatplotlib.use(\\'Agg\\')\\\\nimport matplotlib.pyplot ",
+    "trace": "录\",\\n  \"declared_outputs\": [\"figures/satisfaction_line.png\"],\\n  \"code\": \"import matplotlib\\\\nmatplotlib.use(\\'Agg\\')\\\\nimport matplotlib.pyplot as plt\\\\nimport xlrd\\\\nimport json\\\\nfrom pathlib import Path\\\\n\\\\n# 配置中文字体支持，防止乱码\\\\nplt.rcParams[\\'font.sans-serif\\'] = [\\'SimHei\\', \\'DejaVu Sans\\']\\\\nplt.rcParams[\\'axes.unicode_minus\\'] = False\\\\n\\\\nINPUT_FILE = \\\\\"data/附件 1 各门店客户满意度综合得分-A题.xls\\\\\"\\\\'\n"
+  },
+  {
+    "mode": "ascii",
+    "idx": 0,
+    "inputs": [
+      "data/att1.xls"
+    ],
+    "ok": false,
+    "kind": "exception",
+    "exception": "LLMCallError: 角色 coder（coder@1.0.0）调用失败（含降级）：Unterminated string starting at: line 6 column 11 (char 213)\n原始输出片段（前 500 字符）：'{\\n  \"module\": \"solve.py\",\\n  \"filename\": \"solve.py\",\\n  \"purpose\": \"读取 Excel 97-2003 格式数据，提取门店满意度列名并绘制月度折线图，保存至 figures/fig01.png 及 manifest.json\",\\n  \"declared_outputs\": [\"figures/satisfaction_line.png\"],\\n  \"code\": \"import matplotlib\\\\nmatplotlib.use(\\'Agg\\')\\\\nimport matp",
+    "trace": " 及 manifest.json\",\\n  \"declared_outputs\": [\"figures/satisfaction_line.png\"],\\n  \"code\": \"import matplotlib\\\\nmatplotlib.use(\\'Agg\\')\\\\nimport matplotlib.pyplot as plt\\\\nimport pandas as pd\\\\nimport xlrd\\\\nimport json\\\\nfrom pathlib import Path\\\\n\\\\n# 配置中文支持\\\\nplt.rcParams[\\'font.sans-serif\\'] = [\\'SimHei\\', \\'DejaVu Sans\\']\\\\nplt.rcParams[\\'axes.unicode_minus\\'] = False\\\\n\\\\nINPUT_FILE = \\\\\"data'\n"
+  }
+]

@@ -1,0 +1,43 @@
+{
+  "B1_8192": {
+    "label": "num_predict=8192",
+    "num_predict": 8192,
+    "system_chars": 1998,
+    "user_chars": 3214,
+    "http_status": 200,
+    "response_top_keys": [
+      "created_at",
+      "done",
+      "done_reason",
+      "eval_count",
+      "eval_duration",
+      "load_duration",
+      "message",
+      "model",
+      "prompt_eval_cached_count",
+      "prompt_eval_count",
+      "prompt_eval_duration",
+      "total_duration"
+    ],
+    "done_reason": "stop",
+    "done": true,
+    "eval_count": 1033,
+    "prompt_eval_count": 2095,
+    "content_chars": 2903,
+    "thinking_chars": 0,
+    "content_tail_80": "on\", \"x\": \"月份门店\", \"y\": \"satisfaction_overall_m01\", \"title\": \"各门店月度客户满意度综合得分\"}]\n}",
+    "content_endswith_brace": true,
+    "content_head_120": "{\n  \"module\": \"attach1_satisfaction_plot\",\n  \"filename\": \"solve.py\",\n  \"purpose\": \"读取 Excel 数据并绘制各门店月度满意度折线图，同时生成 manife",
+    "json_parse": "OK",
+    "json_keys": [
+      "code",
+      "declared_outputs",
+      "figure_specs",
+      "filename",
+      "module",
+      "purpose"
+    ],
+    "json_code_chars": 2359
+  },
+  "B2_16384": null
+}

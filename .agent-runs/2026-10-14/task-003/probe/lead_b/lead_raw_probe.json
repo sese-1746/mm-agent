@@ -1,0 +1,13 @@
+{
+  "done_reason": "stop",
+  "eval_count": 556,
+  "prompt_eval_count": 1449,
+  "total_duration_ns": 33995505000,
+  "content_len": 1542,
+  "thinking_len": 0,
+  "content_tail80": ", \"table\": \"att1_satisfaction\", \"x\": \"月份门店\", \"y\": \"1.0\", \"title\": \"各门店月度满意度\"}]\n}",
+  "content_head80": "{\n  \"module\": \"attach1_satisfaction_plot\",\n  \"filename\": \"solve.py\",\n  \"purpose\"",
+  "ends_with_brace": true,
+  "json_loads_strict_True": "OK",
+  "json_loads_strict_False": "OK"
+}

@@ -63,3 +63,30 @@ def generate_script(task_spec: dict, prev_error: str | None = None,
             raise ScriptGenerationError(f"两次生成均未通过静态守卫：{exc2}") from exc2
         output2["code"] = code2
         return output2
+
+
+def make_regen_fn(runner: RoleRunner | None = None,
+                  base_spec: dict | None = None):
+    """构造 `pipeline.repair.repair_once` 需要的 `regen_fn`（兑现 solve_tool 的 docstring 约定）。
+
+    `regen_fn(prev_src, error_context) -> str`：把**上一版完整源码**与错误上下文一起
+    交回 coder 重新生成，返回纯源码字符串（已剥离代码围栏）。
+
+    - `base_spec`：原始任务规格（含 `inputs` 等）。缺省时仅靠 prev_code/prev_error 也能工作。
+    - **依赖方向**：本函数在 agents 层；`tools` 层不 import 它，由上层以回调注入，
+      保持 tools → pipeline 的单向依赖。
+    """
+    runner = runner or make_runner()
+    spec0 = dict(base_spec or {})
+
+    def regen(prev_src: str, error_context: str) -> str:
+        spec = dict(spec0)
+        spec["prev_code"] = prev_src            # 回传上一版完整源码，而非只给片段
+        spec["prev_error"] = (
+            "上一次生成的脚本执行失败或未通过静态守卫。请**基于 prev_code 修正**"
+            "（只改必要之处），并在 code 字段给出修正后的**完整可运行源码**：\n"
+            + (error_context or "（未提供错误信息）")
+        )
+        return extract_code(generate_script(spec, runner=runner))
+
+    return regen
