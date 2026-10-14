@@ -587,3 +587,62 @@ config/intake_scope.yaml        72fff50745f8805a6c1a5a80ce2750e9
   `record_failure` 升级路径未接入图（当前无真实失败源，硬接是假路径）。
 - `caliber_conflict` 取值为 `interrupt` 前无副作用，但节点在 resume 时会重跑（幂等，仅读 state）；符合纪律。
 - 细粒度并发（同进程多线程共享同一 `Coordinator`）未做锁；跨**进程**场景已实测 0 串台。
+
+---
+
+## 10. 修复轮 2 · F6 小修（sanity 卡点补默认待审材料，ISSUES-HITL-01）
+
+### 10.1 现象与根因
+
+- 现象：`run start --sanity-blocking`（无 `--sanity-detail`）时 `review = {}`（空），
+  而 `run start --conflicts` 时 `review` 非空 —— 卡点 2 人工看不到待审材料，与卡点 1 体验不一致。
+- 根因：`mmagent/cli.py` 中 `_DEFAULT_SANITY_REVIEW` 是**死常量**（全仓库零引用）；
+  `--conflicts` 分支有 `else: context["conflicts"] = _DEFAULT_CONFLICTS_REVIEW`，
+  而 `--sanity-blocking` 分支只有 `--sanity-detail` 处理、**缺 else**。
+
+### 10.2 改动（只 2 处，均在允许范围）
+
+1. `mmagent/cli.py:271`（`cmd_run_start` 的 `--sanity-blocking` 分支）补 `else`：
+   `context["sanity_items"] = _DEFAULT_SANITY_REVIEW` —— 与 `--conflicts` 对称，同时消除死常量。
+2. `mmagent/agents/coordinator.py` `RunStatus.review` 类型标注：`dict | None` → **`dict | list | None`**（实际可为 list）。
+
+**库层契约未动**：卡点节点 / driver 的取材料逻辑未改；`Coordinator.start()` 在 ctx 不带材料时
+`review` 仍为**空容器 `{}`（非 None）**。
+
+### 10.3 验收真实输出
+
+```
+① run start --sanity-blocking（无 detail）→ review 非空 ✓
+{"run_id":"f6-s","stage":"SOLVE","paused":true,"gate":"sanity_blocking","question":"合理性检查存在阻断项，需人工裁决后继续",
+ "done":false,"halted":false,"review":[{"check":"unit_mismatch","detail":"示例：单位/量纲不一致，需人工裁决后继续"}],
+ "log":["stage:intake","gate:caliber_conflict=skip","stage:profile","stage:plan","stage:solve"]}
+
+② run start --conflicts（无 detail）→ 仍非空 ✓（回归）
+... "review":[{"field":"评级","reason":"同构外推列口径冲突（示例，见 README §9 已知数据问题 #3）","candidates":["qual_1_2_7_8_10","def_7_8"]}] ...
+
+③ run start --sanity-blocking --sanity-detail '["得分越界 A3"]' → 透传 ✓
+... "review":["得分越界 A3"] ...
+
+④ grep -rn "_DEFAULT_SANITY_REVIEW" mmagent/
+mmagent/cli.py:231:_DEFAULT_SANITY_REVIEW = [
+mmagent/cli.py:271:            context["sanity_items"] = _DEFAULT_SANITY_REVIEW      ← 不再是死常量 ✓
+
+库层契约（ctx 不带材料）：sanity/caliber/compliance 三卡点 review 均 == {} ✓
+
+⑥ 7 冻结基线 md5 仍全未变（同 §9.7）。
+```
+
+### 10.4 收工全量回归
+
+```
+$ .venv\Scripts\python.exe -m pytest tests -q --basetemp=".agent-runs/2026-10-14/task-002/probe/bt_f6"
+........................................................................ [ 28%]
+........................................................................ [ 56%]
+...................x.................................................... [ 85%]
+......................................                                   [100%]
+253 passed, 1 xfailed in 454.13s (0:07:34)
+```
+（与队长预期一致：253 passed / 1 xfailed / 0 failed；用例数未因 F6 增减，task-001 遗留 xfail 保留。）
+`netguard-check` EXIT=0；7 个冻结基线 md5 仍全未变。
+F6 改动已在冻结提交 `d648678` 之后进入 HEAD（`ca5fb64`/`d648678` 已含本次源码）。
+
