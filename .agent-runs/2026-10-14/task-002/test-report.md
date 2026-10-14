@@ -128,6 +128,9 @@ E               assert None in {'approve', 'reject'}
 1 failed in 3.93s
 ```
 
+> ⚠️ **状态更新（修复轮 2）**：该缺陷已被修复（`resume()` 用 `checkpoint_id` 钉住已校验快照），
+> xfail 标记已摘除，用例现为 **PASS**。详见 §8（修复轮 2 回归）。
+
 ---
 
 ## 3. 跨进程证据（真实子进程输出片段，可看出是两个不同 pid）
@@ -313,6 +316,247 @@ cd /d H:\mm-agent
 :: 跨进程证据（真实 pid）
 .venv\Scripts\python.exe -m pytest tests\test_nfr5_recovery.py::TestCrossProcessRecovery -q -s
 
-:: 强制跑出并发竞态的真实失败输出（xfail 证据）
-.venv\Scripts\python.exe -m pytest tests\test_nfr5_recovery.py::TestConcurrentResumeRace -q --runxfail
+:: 强制跑出并发竞态的真实失败输出（xfail 证据）——修复轮 2 已修复并摘除标记
+.venv\Scripts\python.exe -m pytest tests\test_nfr5_recovery.py::TestConcurrentResumeRace -q
 ```
+
+---
+
+# 8. 修复轮 2 回归（Phase 3b，2026-10-14 19:00 追加）
+
+本节为**追加**，前 7 节为第一轮定稿内容（未改动）。
+
+## 8.1 本轮新增范围
+
+- **新增文件**：`tests/test_hitl_decision_flow.py`（**32 用例**，md5 `74dab4501771597940bdd12a3cf5d087`）
+- 被测修订：`mmagent/agents/coordinator.py` md5 `73184f979dff2c3ecd9e7ad32d92be62`（692 行）、
+  `mmagent/cli.py` md5 `c155199992862b947e25f84cda4cc36a`
+- `tests/test_nfr5_recovery.py` **本轮未改**（md5 `3888ada3fcabbd8bfa9d5acb1ae6de6a`；
+  其并发竞态用例的 xfail 标记已由队长授权摘除，现为 PASS）
+- `mmagent/` 一字未改（发现缺陷全部写入 §8.5，未动手修）
+- **我的首轮用例被修正一处的说明（如实记录）**：`test_nfr5_recovery.py` 中并发竞态用例的断言
+  原文为 `assert (decisions.get(GATE_COMPLIANCE) or {}).get("decision") in {"approve","reject"}`，
+  该写法**对正确行为不可满足**（竞态修好后合规卡点保持"待审"，`decisions` 里根本没有
+  `pre_export_compliance` 键，取值恒为 `None`）——这是我首轮写的断言缺陷。
+  实现方按队长授权改为 `crossed is None or (crossed or {}).get("decision") in {"approve","reject"}`
+  （"要么没被跨过，要么只被合法 approve/reject 跨过"），我复核认为**语义等同于本意、未被弱化**：
+  修复前串台出的口径形状 dict 取值仍为 `None` → 断言仍会失败（证据见 §2.4 的 `--runxfail` 真实失败输出）。
+  即该用例仍是"修复前红、修复后绿"的有效回归用例。
+
+## 8.2 用例清单（文件 + 用例名 + 覆盖需求编号）
+
+| 修复项 | 覆盖需求 | 用例（节点名） | 意图 |
+|---|---|---|---|
+| **F1 否定出口** | HITL 裁定语义 / FR-5 | `TestDecisionDrivenFlow::test_compliance_reject_终止于HALTED且不走到export` | reject → `stage=HALTED`、`halted=True`、`done=False`、`paused=False`；`log` **整表相等**且 `"stage:export" not in log` |
+| **F1 否定出口** | HITL 裁定语义 | `::test_sanity_abort_终止于HALTED且不进入render与assemble` | abort → HALTED；`stage:render`/`stage:assemble`/`stage:export` 均不在 log |
+| **F1 halt 留痕** | HITL 裁定语义 | `::test_halt写hitl_run_halted事件且不写run_finished` | `hitl.run_halted` 恰 1 条（含 gate/decision/stage）；`hitl.run_finished` 为 0 |
+| **F1 正常出口** | FR-5 | `::test_肯定裁定仍正常到达DONE[sanity-accept / compliance-approve]` | 防止修否定出口把正常路径一起断掉 |
+| **F1 正常出口** | FR-5 | `::test_三卡点全流程肯定裁定到达DONE` | 三卡点全肯定裁定 → DONE，`log` 整表相等 |
+| **F1 caliber 路由** | FR-5 | `::test_caliber三种合法裁定均继续推进[use_mapping / keep_raw / human_override]` | 口径裁定只有「如何解决」语义 → 三种取值均应推进到卡点 3 |
+| **F1 回边上限** | HITL 裁定语义 | `TestRerunBound::test_MAX_RERUN常量为1` | 阈值常量存在且为 1（防无限循环） |
+| **F1 回边上限** | HITL 裁定语义 | `::test_fix_and_rerun首次重入solve后再次挂起` | 首次回边 → 回到 sanity 卡点再评审；`rerun:solve` 恰 1 次、`stage:solve` 恰 2 次 |
+| **F1 回边上限** | HITL 裁定语义 | `::test_fix_and_rerun第二次超上限转HALTED` | 第二次 → HALTED，且不得再重入 solve，`stage:render` 不在 log |
+| **F1 回边** | HITL 裁定语义 | `::test_回边后接受裁定可以正常走完` | 回边不是死路：重入后 accept 仍能到 DONE |
+| **F2 payload** | HITL 裁定语义 | `TestReviewPayload::test_挂起payload恒含四键且review非None[卡点1/2/3]` | 原始 interrupt payload 键集 == `{gate,stage,question,review}`；无材料时 `review == {}` 而非 None |
+| **F2 payload** | HITL 裁定语义 | `::test_有材料时review携带明细[口径材料/sanity材料/合规材料]` | 三类待审材料均原样透传到 `review` |
+| **F2 payload** | HITL 裁定语义 | `::test_非挂起状态review为None` | 边界：DONE / HALTED 时 `review is None` |
+| **F2 payload** | HITL 裁定语义 | `::test_CLI_start_conflicts时review能看到冲突明细` | `run start --conflicts` → 非空冲突明细 |
+| **F2 payload** | HITL 裁定语义 | `::test_CLI_start_conflict_detail透传自定义材料` | `--conflict-detail` JSON 原样透传 |
+| **F2 payload** | HITL 裁定语义 | `::test_CLI_start_conflict_detail非法JSON返回码2` | 非 JSON 材料 → exit 2（不静默） |
+| **F4 退出码** | NFR-5 / FR-5 | `TestUnknownRunStatus::test_未知run_id退出码4并给出明确提示` | exit **4** + stderr 明确；不得输出看似正常的 JSON |
+| **F4 退出码** | FR-5 | `::test_api层未知run_id抛UnknownRunError` | API 层抛 `UnknownRunError` |
+| **F4 退出码** | FR-5 | `::test_已存在run的status退出码0` | 已挂起 run → exit 0 |
+| **F4 退出码** | FR-5 | `::test_终止后run的status退出码0且halted为真` | halt 后 status → exit 0 且 `halted=True` |
+| **F4 退出码** | FR-5 | `::test_台账未初始化时exit3优先于exit4` | 前置校验顺序：3（台账）先于 4（run_id） |
+| **F3 受控错误** | NFR-5 | `TestCheckpointUnavailable::test_检查点库只读时CLI_start退出码3且无traceback` | 只读检查点库 → exit 3，stderr/stdout **均无 `Traceback`** |
+| **F3 受控错误** | NFR-5 | `::test_检查点库只读时CLI_resume退出码3且无traceback` | 写路径不可用 → exit 3 + 明确提示 |
+| **F3 受控错误** | NFR-5 | `::test_检查点路径不是数据库文件时退出码3` | `--ckpt` 指向目录 → exit 3，无原始 traceback |
+| **F3 受控错误** | NFR-5 | `::test_检查点不可用时API抛CheckpointUnavailable` | API 层抛 `CheckpointUnavailable` |
+
+**分类计数**：`TestDecisionDrivenFlow` 9 / `TestRerunBound` 4 / `TestReviewPayload` 10 /
+`TestUnknownRunStatus` 5 / `TestCheckpointUnavailable` 4 = **32**。
+
+## 8.3 运行结果（真实输出）
+
+```
+$ .venv\Scripts\python.exe -m pytest tests/test_hitl_decision_flow.py -q
+................................                                         [100%]
+32 passed in 93.18s (0:01:33)
+```
+
+```
+$ .venv\Scripts\python.exe -m pytest tests -q
+........................................................................ [ 56%]
+...................x.................................................... [ 85%]
+......................................                                   [100%]
+253 passed, 1 xfailed in 373.55s (0:06:13)          ← 254 collected
+```
+
+```
+$ .venv\Scripts\python.exe -m pytest tests -q --ignore=tests/test_nfr5_recovery.py --ignore=tests/test_hitl_decision_flow.py
+...................x..........................                           [100%]
+189 passed, 1 xfailed in 80.11s (0:01:20)
+```
+
+**计数口径（完全自洽）**：
+
+| 口径 | passed | xfailed | failed | skipped |
+|---|---|---|---|---|
+| task-001 基线（排除两个新文件） | **189** | **1** | 0 | 0 |
+| 第一轮 `test_nfr5_recovery.py` | 32 | 0 | 0 | 0 |
+| 第二轮 `test_hitl_decision_flow.py` | **32** | 0 | 0 | 0 |
+| 全量 `pytest tests -q` | **253** = 189+32+32 | **1** | **0** | **0** |
+
+- 全量唯一 xfail 仍是 task-001 遗留的 `test_fr9_profile.py::test_INSERT_OR_REPLACE_违规留下事件留痕`；
+- 第一轮那条并发缺陷 xfail **已修复**（F3 `checkpoint_id` 钉定 + tip 比对），标记已摘除 → 现为 PASS；
+- **本轮新增 0 failed / 0 skipped**，task-001 的 190 例无退化。
+
+> 操作提示（非缺陷）：本仓库跑全量时，pytest 结束阶段清理 `pytest-of-*/garbage-*`（>50 文件）
+> 会被本机的批量删除保护拦下，**把 "N passed" 摘要行一起吞掉**。
+> 建议加 `--basetemp=<显式目录>` 规避（本报告数字即用该方式取得），否则 `| tail` 看不到计数。
+
+## 8.4 关键新行为的实测证据（真实输出片段）
+
+**F1 否定出口（`log` 整表，可直观看到没有 `stage:export`）**：
+
+```
+reject:  stage='HALTED' paused=False done=False halted=True gate=None
+         log=['stage:intake','gate:caliber_conflict=skip','stage:profile','stage:plan','stage:solve',
+              'gate:sanity_blocking=skip','stage:render','stage:assemble',
+              'gate:pre_export_compliance=reject','stage:halt']
+abort:   stage='HALTED' paused=False done=False halted=True
+         log=['stage:intake','gate:caliber_conflict=skip','stage:profile','stage:plan','stage:solve',
+              'gate:sanity_blocking=abort','stage:halt']
+rerun#1: stage='SOLVE' paused=True gate='sanity_blocking'
+         log=[...,'gate:sanity_blocking=fix_and_rerun','rerun:solve','stage:solve']
+rerun#2: stage='HALTED' halted=True
+         log=[...,'rerun:solve','stage:solve','gate:sanity_blocking=fix_and_rerun','stage:halt']
+```
+
+**F1 halt 留痕**：
+
+```
+hitl.gate_resumed: {"run_id":"r-reject","gate":"pre_export_compliance","decision":{"decision":"reject",...}}
+hitl.run_halted:   {"run_id":"r-reject","gate":"pre_export_compliance","decision":{"decision":"reject",...},"stage":"HALTED"}
+（hitl.run_finished 无记录）
+```
+
+**F2 payload 四键**（三个卡点都实测）：
+
+```
+compliance payload = {'gate':'pre_export_compliance','stage':'ASSEMBLE',
+                      'question':'导出前需人工确认 AI 使用披露与合规声明','review':{}}
+keys = ['gate','question','review','stage']
+review(有材料) = ['AI 使用声明','数据来源']      ← compliance
+review(有材料) = [{'field':'评级'}]              ← caliber
+```
+
+**F4 / F3 退出码（独立子进程）**：
+
+```
+status(未知 run_id)       rc = 4 | stderr: [run status] 未知 run_id：'nope'（该线程没有任何检查点）
+status(已存在/已挂起)     rc = 0
+status(未知)+台账未初始化 rc = 3 | stderr: [run] 台账库 ... 缺少 events 表 ... db init --db ...
+(a) --ckpt 指向目录       rc = 3 | Traceback in stderr: False | [run start] 无法打开检查点库 ...(unable to open database file)
+(b) --ckpt 全新只读文件   rc = 3 | Traceback: False | [run start] 无法打开检查点库 ...(attempt to write a readonly database)
+(b2) status 只读          rc = 3 | Traceback: False
+(c2) resume 只读（WAL）   rc = 3 | Traceback: False | [run resume] 检查点库不可用（attempt to write a readonly database）
+```
+
+## 8.5 ISSUES
+
+### ISSUES-HITL-01（低危，一致性/体验）`_DEFAULT_SANITY_REVIEW` 是死常量，两卡点「默认待审材料」不对称
+
+- **位置**：`mmagent/cli.py:226-234`（`_DEFAULT_CONFLICTS_REVIEW` / `_DEFAULT_SANITY_REVIEW` 两个常量）、
+  `mmagent/cli.py:253-269`（`cmd_run_start` 的 context 组装）
+- **现象（实测）**：
+
+  ```
+  $ python -m mmagent.cli run start --run-id a --conflicts ...          # 无 --conflict-detail
+  review = [{'field': '评级', 'reason': '同构外推列口径冲突（示例，见 README §9 已知数据问题 #3）', 'candidates': [...]}]
+
+  $ python -m mmagent.cli run start --run-id b --sanity-blocking ...    # 无 --sanity-detail
+  review = {}                                                          ← 空容器
+  ```
+- **推测原因**：`cmd_run_start` 为 `--conflicts` 写了 `else` 分支填 `_DEFAULT_CONFLICTS_REVIEW`（cli.py:261-262），
+  但 `--sanity-blocking` 分支只处理 `args.sanity_detail`（cli.py:265-269），**没有 else**。
+  于是 `_DEFAULT_SANITY_REVIEW`（cli.py:231-234）全仓库**零引用**（已用 grep 确认），成为死代码。
+- **影响**：人工在卡点 2 打开 payload 时看到的 `review` 为空，与卡点 1 的体验不一致；
+  不影响流程正确性，也不违反 F2 契约（无材料时**允许**为空容器）。属"该给的材料没给"。
+- **建议**：补 `else: context["sanity_items"] = _DEFAULT_SANITY_REVIEW`，或删掉该死常量以免误导。
+- **未写成 xfail 用例**：这是"默认示例材料"的一致性/体验问题，未被任何冻结契约约束；
+  直接把它固化成断言会越界（会替实现方定义产品行为）。已在 §8.4 用实测输出留下证据。
+
+### 观察项（备案，不列为缺陷）
+
+- `RunStatus.review` 类型标注为 `dict | None`（coordinator.py:418），但**实际值可以是 list**
+  （如 `review == [{'field': '评级'}]`、`['AI 使用声明']`）。建议放宽为 `list | dict | None`；
+  当前不影响运行（Python 不强制），仅影响可读性与静态检查。
+- 只读检查点库下 **`run status` exit 0 而 `run resume` exit 3**（读可成功、写不可用）。
+  语义上合理（读操作不需要写权限），记录备查；若希望"库不可写时 status 也报错"，需队长决策。
+- `_emit("hitl.gate_resumed")` 仍写在 `invoke` **之前**（coordinator.py:646-650，第一轮观察项-3 的结论不变）。
+  本轮新增的 `tip_before`/`tip_after` 比对（coordinator.py:649-656）正好补上了"投递了但没生效"的检测，
+  建议把该比对结论也写进台账（当前只在异常时才体现）。
+
+## 8.6 本轮结论
+
+- **F1（裁定驱动控制流）**：`reject`/`abort` 否定出口 → `HALTED` 且**不产出 export**；`approve`/`accept` 正常出口 → `DONE`；
+  `fix_and_rerun` 回边上限 `MAX_RERUN=1`、超限转 halt —— **全部有回归用例支撑，32 条全绿**。
+- **F2（review payload）**：三卡点 payload 恒含四键、无材料为空容器非 None、有材料原样透传 —— 已覆盖。
+- **F3（受控错误）**：检查点库只读/非文件 → exit 3 + 明确提示 + **无原始 traceback** —— 已覆盖；
+  第一轮的并发竞态缺陷用例现已转 PASS。
+- **F4（退出码）**：未知 run_id → exit 4；台账未初始化 → exit 3（优先级正确）—— 已覆盖。
+- **NFR-5 结论不变**：跨进程恢复**有测试用例支撑**（第一轮 §3 的 6 个不同 pid 证据 + 硬崩溃恢复）。
+- 新增 1 条低危 ISSUES（默认材料不对称），**不阻塞**；无新增 failed/skipped。
+
+**复现命令**：
+
+```bat
+cd /d H:\mm-agent
+
+:: 修复轮 2 用例
+.venv\Scripts\python.exe -m pytest tests\test_hitl_decision_flow.py -q
+
+:: 全量（建议带 --basetemp，否则摘要行会被本机批量删除保护吞掉）
+.venv\Scripts\python.exe -m pytest tests -q --basetemp="%TEMP%\mmagent-pytest-tess"
+
+:: task-001 基线（应 189 passed / 1 xfailed）
+.venv\Scripts\python.exe -m pytest tests -q --ignore=tests\test_nfr5_recovery.py --ignore=tests\test_hitl_decision_flow.py
+```
+
+
+---
+
+## 8. 补记（2026-10-14 修复轮 2 后，队长 Horizon 追加，均来自真实 pytest 输出）
+
+> §1–§7 是**修复轮 2 之前**的快照（当时 220 passed / 2 xfailed）。修复轮 2（F1 裁定驱动控制流 /
+> F2 review payload / F3 并发不串台 / F4 status exit 4）落地后，新增独立测试文件
+> `tests/test_hitl_decision_flow.py`（32 例），并把并发缺陷用例摘除 xfail 转绿。
+
+### 8.1 全量真实输出（队长复跑；用仓库内 basetemp 规避沙箱批量删除守卫导致的假 exit≠0）
+
+```
+$ .venv\Scripts\python.exe -m pytest tests -q -rxX -p no:cacheprovider --basetemp=".agent-runs/2026-10-14/task-002/probe/pytmp_lead"
+........................................................................ [ 28%]
+........................................................................ [ 56%]
+...................x.................................................... [ 85%]
+......................................                                   [100%]
+253 passed, 1 xfailed in 195.12s (0:03:15)
+PYTEST_EXIT=0
+```
+
+### 8.2 计数口径（自洽）
+
+| 口径 | passed | xfailed |
+|---|---|---|
+| task-001 基线（原 7 文件） | 189 | 1 |
+| `tests/test_nfr5_recovery.py`（task-002 首轮） | 32 | 0（原 1 条并发 xfail 已转绿） |
+| `tests/test_hitl_decision_flow.py`（修复轮 2 新增） | 32 | 0 |
+| 全量 `pytest tests` | **253** = 189+32+32 | **1** |
+
+唯一 xfail 仍为 task-001 遗留 `test_fr9_profile.py::test_INSERT_OR_REPLACE_违规留下事件留痕`。
+
+> 修复轮 2 已把 `TestConcurrentResumeRace::test_并发陈旧裁定不得串台到下一个卡点` 的 xfail 摘除并
+> **PASS**（ISSUES-NFR5-01 在代码层修复：`resume()` 把挂起快照的 `checkpoint_id` 钉进 invoke config）。
+> 该用例断言被实现方从「对正确行为恒不可满足」修正为符合其本意（合规卡点不得被**非法**裁定跨过），
+> 已在 `implementer-report.md` §9.3 记录并交队长复核（队长已在 Phase 4 认可）。

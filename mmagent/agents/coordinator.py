@@ -415,7 +415,7 @@ class RunStatus:
     done: bool = False
     log: list = field(default_factory=list)
     halted: bool = False               # True=已按裁定中止（正常终态，stage=HALTED）
-    review: dict | None = None         # paused=True 时的待审材料（无材料时为空容器）
+    review: dict | list | None = None  # paused=True 时的待审材料（无材料时为空容器）
 
     def to_dict(self) -> dict:
         return {

@@ -267,6 +267,8 @@ def cmd_run_start(args) -> int:
             if err is not None:
                 return err
             context["sanity_items"] = detail
+        else:
+            context["sanity_items"] = _DEFAULT_SANITY_REVIEW
     try:
         coord = Coordinator(db_path=args.db, ckpt_path=args.ckpt)
     except CheckpointUnavailable as exc:

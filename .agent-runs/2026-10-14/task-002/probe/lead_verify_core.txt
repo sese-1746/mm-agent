@@ -1,0 +1,57 @@
+======================================================================
+STEP 0  init_db（显式初始化台账库）
+[OK  ] db init rc=0
+[OK  ] 台账库已创建
+======================================================================
+STEP 1  真实挂起 + os._exit(0) 硬杀（不 close、不清理 WAL）
+child rc= 0 stdout= START INTAKE True caliber_conflict
+[OK  ] 硬杀子进程 rc==0（os._exit(0)）
+[OK  ] 检查点库已落盘
+======================================================================
+STEP 2  原生 sqlite3 直读检查点库（绕过应用层对照）
+ckpt tables = ['checkpoints', 'writes']
+checkpoints rows=3 distinct thread_id=1
+[OK  ] checkpoints 表有数据（挂起态已持久化）
+[OK  ] thread_id 含 crash-1（实际 ['crash-1']）
+======================================================================
+STEP 3  新进程仅凭同一 ckpt 续跑到 DONE
+STATUS INTAKE True caliber_conflict
+R1 SOLVE True sanity_blocking
+R2 ASSEMBLE True pre_export_compliance
+R3 DONE False True
+LOG ["stage:intake", "gate:caliber_conflict=use_mapping", "stage:profile", "stage:plan", "stage:solve", "gate:sanity_blocking=accept", "stage:render", "stage:assemble", "gate:pre_export_compliance=approve", "stage:export"]
+DONE True DONE
+[OK  ] 续跑子进程 rc==0（实际 0）
+[OK  ] 新进程读回挂起态 = caliber_conflict（实际 caliber_conflict, paused=True）
+[OK  ] log 含 stage:export（真正跑完 export）
+[OK  ] 无重复 intake（节点未整体重跑）
+[OK  ] 终态 DONE/done=True（实际 DONE/True）
+======================================================================
+STEP 4  非法裁定：应用层拦 + 不触发 UnboundLocalError
+RES None InvalidGateDecision isNameError= False
+RES empty InvalidGateDecision isNameError= False
+RES wronggate InvalidGateDecision isNameError= False
+STILL caliber_conflict True
+[OK  ] 非法裁定[None] 被 InvalidGateDecision 拦截（实际 InvalidGateDecision）
+[OK  ] 非法裁定[None] 非 NameError/UnboundLocalError（isNameError=False）
+[OK  ] 非法裁定[empty] 被 InvalidGateDecision 拦截（实际 InvalidGateDecision）
+[OK  ] 非法裁定[empty] 非 NameError/UnboundLocalError（isNameError=False）
+[OK  ] 非法裁定[wronggate] 被 InvalidGateDecision 拦截（实际 InvalidGateDecision）
+[OK  ] 非法裁定[wronggate] 非 NameError/UnboundLocalError（isNameError=False）
+[OK  ] 非法裁定后状态仍停在原卡点（未被污染）
+======================================================================
+STEP 5  对照：绕过 _validate_decision 直连 langgraph，resume=None → UnboundLocalError?
+BYPASS UnboundLocalError True
+[OK  ] 对照：裸 resume=None 触发 UnboundLocalError（实际 UnboundLocalError）-> 守卫必要
+======================================================================
+STEP 6  hitl.gate_paused 每个 (run_id,gate) 恰好 1 条
+  paused {'rid': 'byp-1', 'g': 'caliber_conflict', 'c': 1}
+  paused {'rid': 'crash-1', 'g': 'caliber_conflict', 'c': 1}
+  paused {'rid': 'crash-1', 'g': 'pre_export_compliance', 'c': 1}
+  paused {'rid': 'crash-1', 'g': 'sanity_blocking', 'c': 1}
+  paused {'rid': 'inv-1', 'g': 'caliber_conflict', 'c': 1}
+[OK  ] crash-1 三卡点各 1 条 gate_paused（实际 [{'rid': 'crash-1', 'g': 'caliber_conflict', 'c': 1}, {'rid': 'crash-1', 'g': 'pre_export_compliance', 'c': 1}, {'rid': 'crash-1', 'g': 'sanity_blocking', 'c': 1}]）
+  event types: {'coordinator.transition': 6, 'hitl.gate_paused': 5, 'hitl.gate_resumed': 3, 'hitl.run_finished': 1, 'hitl.run_started': 3}
+[OK  ] crash-1 恰 1 条 run_finished（实际 1）
+======================================================================
+LEAD-CORE RESULT: PASS（全部断言通过）

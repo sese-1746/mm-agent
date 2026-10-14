@@ -239,3 +239,38 @@ cd H:\mm-agent && .venv\Scripts\python.exe -m pytest tests -q
 ### 9.5 核验结论
 
 **冻结基线与产物全部自洽，源码/配置/产物零漂移；`PROGRESS.md` 有 6 处文档层记述与磁盘不符（A–F），均不影响代码与产物的有效性。** 本次仅核验：未改动任何业务代码、未改动冻结文件、未重跑全量测试（仅 `--collect-only`）。
+
+---
+
+## 10. task-002 后冻结基线更新（2026-10-14 追加，未改动上文）
+
+> 本节为 task-002「人机回环（LangGraph interrupt + SqliteSaver）」交付后追加。§1「8 项终版基线」中
+> **`README.md` 已因 task-002 的文档更新而失效**，故发布**新基线**；其余 7 项沿用 §1。
+
+### 10.1 新基线（2026-10-14 磁盘实测）
+
+| 文件 | §1 基线 md5 | 现 md5 | 判定 |
+|---|---|---|---|
+| `mmagent/pipeline/intake.py` | `b16d96b97e353abd151f594ad6571f9f` | 同 | ✅ 未变 |
+| `config/field_aliases.yaml` | `ecbd5d8ab4fa0e402255028bcefdc3ca` | 同 | ✅ 未变 |
+| `README.md` | `2175bb71faab5b4618373e8ca618fc92` | **`361afccc9e0d0262604d5c4887ff454a`** | ⚠️ **有意变更** |
+| `mmagent/store/schema.sql` | `dd65844bc5d0815d6c377c2b7c4dbfd4` | 同 | ✅ 未变 |
+| `mmagent/pipeline/guard.py` | `7bf8d6bf77b805594a2c1cb1b1de52a6` | 同 | ✅ 未变 |
+| `mmagent/store/db.py` | `084cfc517f1e2cce456b307a3f5fcee0` | 同 | ✅ 未变 |
+| `mmagent/checks/sanity.py` | `e25b0d7716a209cfbcf159b155c524d9` | 同 | ✅ 未变 |
+| `config/intake_scope.yaml` | `72fff50745f8805a6c1a5a80ce2750e9` | 同 | ✅ 未变 |
+
+**7/8 一字未变**；仅 `README.md` 有意变更（task-002 DoD#6）。
+
+### 10.2 README.md 变更内容（为何必须重发基线）
+
+- 新增「7. 人机回环（LangGraph）」小节 + §7.5–7.9：裁定→去向语义表（含 `HALTED` 终态）/ payload `review` 键 /
+  澄清课件 P2「`interrupt()` 保存完整状态」的**不成立**说法 / 有意不用课件 `SqliteSaver.from_conn_string`
+  的理由 / 口径冲突取值域映射表（docx `use_a/use_b/third_party` ↔ 实现 `use_mapping/keep_raw/human_override`，标注待用户确认偏差）。
+- Python 版本 `3.13.12` → **`3.13.14`**（实测）；章节编号顺延（原 7/8 → 8/9）。
+
+### 10.3 新基线生效值
+
+- **`README.md` = `361afccc9e0d0262604d5c4887ff454a`**（其余 7 项沿用 §1）。
+- 其余 7 个源文件（含 `schema.sql`）一字未改 → task-001 的 FR-2 / FR-5 / FR-6 / FR-9 / NFR-2 / NFR-7 冻结语义不受影响。
+- 本节由 task-002 收尾（Phase 4 独立验证）追加；task-002 已提交（commit 见 task-002 `final-summary.md`）。
