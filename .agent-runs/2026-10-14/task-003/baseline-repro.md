@@ -146,3 +146,55 @@ ascii : 0/3 ok   失败分类=['exception', 'exception', 'exception']
 - `mmagent/pipeline/guard.py`（**在冻结基线内**）→ md5 变更，须重发布基线并让测试方重跑；
 - `README.md` 亦为基线内文件（本轮未改，沿用 task-002 已发布的新值）；
 - 其余改动文件（`runner.py`/`base.py`/`coder.py`/`solve_tool.py`/`prompts/coder.system.j2`）**不在**基线内。
+
+---
+
+## 6. 更正：§5.3 第 7 条（解析层）的归因**是错的**
+
+> 本节由队长在收到**并行执行体（21:00 定时任务）的独立交叉复核**后追加。
+> 它对我上一轮的诊断提出了直接反驳，我复核后**确认它对、我错**。
+
+### 6.1 我的原诊断（错）
+
+我原判：模型把 `code` 值里的 `\n` 写成了真实换行 → 严格 JSON 解析失败 → 用 `json.loads(..., strict=False)` 治好。
+
+### 6.2 独立复算：`strict=False` **不对症**
+
+队长本地实验（无需 Ollama），三种输入形态 × 两种解析模式：
+
+| 输入形态 | `strict=True` | `strict=False` |
+|---|---|---|
+| A 字符串**未闭合**（截断） | `Unterminated string` | **`Unterminated string`** ← 治不了 |
+| B 裸换行但字符串**闭合** | `Invalid control character` | **OK** ← 只治这种 |
+| C 截断 + 裸换行 | `Invalid control character` | **`Unterminated string`** ← 治不了 |
+
+**线上 6/6 的报错文本是 `Unterminated string`（= A 类，截断），不是 `Invalid control character`。**
+→ `strict=False` **对本轮失败无效**，原归因作废。
+（`strict=False` 本身无害、能容忍另一类格式噪声，故**保留**，但**不再声称它能修这个问题**。）
+
+### 6.3 真正的机制：生成预算超出运行态上下文窗口
+
+- `config/models.yaml` `roles.coder.max_tokens = 8192` → 作为 `num_predict` 发出；
+- **`OllamaClient.chat` 从不发送 `num_ctx`** → 沿用 Ollama 运行态默认；
+- 队长实测 `GET /api/ps`：`qwen3.5:latest` 与 `qwen3.5:0.8b` 的**运行态 ctx 均为 4096**；
+- 而模型本体 ctx 上限是 **262144**（`POST /api/show` → `qwen35.context_length`）。
+
+→ **`num_predict`(8192) > 运行态 ctx(4096)**：可用生成空间被挤压，输出可能在 JSON 的 `code` 字段
+中途被**硬截断** → 字符串未闭合 → `Unterminated string`。这解释了报错位置极其靠前
+（char 176~236，即"刚开头就被切断"）以及"修复轮（prompt 含完整 `prev_code`）更易崩"。
+
+**旁证（并行执行体实测）**：`prompt_eval_count=2050` 对应 17432 字符的 prompt
+→ **Ollama 会静默截断超长 prompt**，属另一条需记录的静默行为。
+
+### 6.4 处置
+
+`config/models.yaml` 增 `ollama.num_ctx: 16384`（> `num_predict`），`base.py` 的 `chat` 显式放进 `options`。
+**保留** `strict=False`（另一类噪声的防线）与「保留失败原始输出片段」（诊断能力，必要）。
+
+### 6.5 诚实性附注（并行污染）
+
+并行执行体记录到**三方并发**（交互会话探针 + 另一个 `pytest -q` + 验证成员 Vic），并实测到
+高负载下 `54 passed, 1 xfailed, 199 errors`，而**同一套代码在负载退去后 = `253 passed, 1 xfailed`**。
+→ 本轮**此前所有可运行率数字（含 §5.2 的 R4/R5 两行）都是在并发争抢 Ollama 的单机串行推理下取得的，
+不具备独占可复现性**。
+本次 `num_ctx` 修复后的复测将在**独占环境**（已确认无其他 python 进程）进行，该次结果才作为权威数字。

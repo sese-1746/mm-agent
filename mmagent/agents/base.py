@@ -54,6 +54,7 @@ class OllamaClient:
         cfg = (config or load_models_config())["ollama"]
         self.base_url = cfg.get("base_url", "http://localhost:11434")
         self.timeout = cfg.get("timeout_s", 120)
+        self.num_ctx = cfg.get("num_ctx")      # 运行态上下文窗口（None=用 Ollama 默认）
         self.think = cfg.get("think", None)
         self._client = httpx.Client(base_url=self.base_url, timeout=self.timeout)
 
@@ -69,6 +70,10 @@ class OllamaClient:
         options: dict = {"temperature": temperature}
         if num_predict:
             options["num_predict"] = num_predict
+        if self.num_ctx:
+            # 必须显式传：Ollama 运行态默认 ctx=4096，若 num_predict 更大，
+            # 生成空间被挤压 → 输出在 JSON 中途被截断（"Unterminated string"）。
+            options["num_ctx"] = int(self.num_ctx)
         payload = {
             "model": model,
             "messages": messages,

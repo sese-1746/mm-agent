@@ -2,6 +2,10 @@
 ollama:
   base_url: http://localhost:11434
   timeout_s: 300      # 生成整段求解脚本较慢，实测 120s 会截断长代码
+  num_ctx: 16384      # 运行态上下文窗口。Ollama 默认仅 4096，而 roles.coder.max_tokens=8192
+                      # 比它还大 → 生成空间被挤压，输出会在 JSON 的 code 字段中途被硬截断，
+                      # 表现为 json 解析报 "Unterminated string"（实测随机 ~6/6 命中）。
+                      # 必须显式抬高到 > num_predict，否则「回传完整源码」的修复轮尤其容易崩。
   think: false        # qwen3.5 为思考型模型：开启思考时 content 为空、全部输出落在
                       # message.thinking（实测 12k 字符后 done_reason=length，JSON 解析必失败），
                       # 本系统只取严格 JSON，故显式关闭思考
