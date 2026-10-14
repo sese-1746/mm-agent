@@ -1,0 +1,9 @@
+[phase A] pid=32960  db=H:\mm-agent\.agent-runs\2026-10-14\task-002\probe\probe04_ckpt.sqlite
+[phase A] invoke 返回 keys = ['messages', 'stage', 'caliber_conflicts', 'conflicts_confirmed', 'sanity_blocking', 'sanity_decision', 'compliance_confirmed', 'log', '__interrupt__']
+[phase A] __interrupt__     = [Interrupt(value={'gate': 'caliber_conflict', 'stage': 'INTAKE', 'question': '存在口径冲突，是否采用 field_mapping 建议？'}, id='e1a7b624e617a074b4b00357364cf34c', response_schema=None)]
+[phase A] snapshot.next     = ('intake',)
+[phase A] snapshot.values.stage = INTAKE
+[phase A] task.interrupts   = (Interrupt(value={'gate': 'caliber_conflict', 'stage': 'INTAKE', 'question': '存在口径冲突，是否采用 field_mapping 建议？'}, id='e1a7b624e617a074b4b00357364cf34c', response_schema=None),)
+[phase A] 库内表 = ['checkpoints', 'writes']
+[phase A] checkpoint 行数 = 2
+[phase A] 模拟崩溃：os._exit(0)，不 close 连接、不做清理

@@ -26,6 +26,12 @@ artifacts/runs/
 artifacts/tmp/
 *.tmp
 
+# ---- 流程探针的可再生产物（PDF 副本 / 探针库 / 抽取出的图片，均可复跑重生成）----
+.agent-runs/**/probe/pdf/
+.agent-runs/**/probe/**/*.sqlite
+.agent-runs/**/probe/**/*.sqlite.prev
+.agent-runs/**/probe/**/*.db
+
 # ---- 工作区内部元数据（不删除，仅不入库）----
 .workbuddy/
 

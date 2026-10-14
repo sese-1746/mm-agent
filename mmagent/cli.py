@@ -5,6 +5,7 @@
 - intake --dataset <dir> --out <dir> 附件体检
 - env-attest --out <path>          环境留存（python/依赖版本 + Ollama 模型列表）
 - netguard-check                   静态扫描仓库 *.py 是否违规直连外网
+- run start|resume|status          人机回环（LangGraph interrupt + SqliteSaver）
 """
 from __future__ import annotations
 
@@ -21,7 +22,9 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parent.parent
 OLLAMA_TAGS_URL = "http://localhost:11434/api/tags"
 TRACKED_DEPS = ["fastapi", "uvicorn", "pandas", "openpyxl", "xlrd", "matplotlib",
-                "python-docx", "pydantic", "PyYAML", "httpx", "Jinja2", "pytest"]
+                "python-docx", "pydantic", "PyYAML", "httpx", "Jinja2", "pytest",
+                # task-002 人机回环：本地 LangGraph 版本须可追溯（零外网）
+                "langgraph", "langgraph-checkpoint-sqlite"]
 BANNED_NET_IMPORTS = ("requests", "socket", "urllib", "ftplib")
 
 
@@ -52,10 +55,14 @@ def _ollama_models() -> dict:
 
 
 def _iter_repo_py(scan_root: Path, exclude: set[Path]) -> list[Path]:
-    """遍历仓库内 *.py，排除给定文件（扫描器自身）与 .venv。"""
+    """遍历仓库内 *.py，排除给定文件（扫描器自身）、.venv 与 .agent-runs。
+
+    `.agent-runs/` 已被 git 跟踪（调查/测试/验证的探针脚本），其中合法地会出现
+    `import socket` / `requests` 等字样，不应被当成产品代码误报（task-002 §3.9）。
+    """
     files = []
     for p in scan_root.rglob("*.py"):
-        if any(part in {".venv", "venv", "__pycache__", ".git"} for part in p.parts):
+        if any(part in {".venv", "venv", "__pycache__", ".git", ".agent-runs"} for part in p.parts):
             continue
         if p.resolve() in exclude:
             continue
@@ -178,6 +185,161 @@ def cmd_desensitize_check(args) -> int:
     return 0
 
 
+# ---------------------------------------------------------------- 人机回环（run）
+
+def _events_table_present(db_path: str) -> bool:
+    """检测台账库是否已初始化（存在 events 表）。
+
+    不自动建库——避免静默产生新文件（那正是本项目要消灭的"安静地丢数据"）。
+    """
+    import sqlite3
+
+    path = Path(db_path)
+    if not path.exists():
+        return False
+    try:
+        conn = sqlite3.connect(str(path), timeout=5.0)
+        try:
+            row = conn.execute(
+                "SELECT name FROM sqlite_master WHERE type='table' AND name='events'"
+            ).fetchone()
+            return row is not None
+        finally:
+            conn.close()
+    except sqlite3.Error:
+        return False
+
+
+def _require_ledger(db_path: str) -> int | None:
+    """台账库未初始化时打印明确错误并返回 exit code 3；就绪返回 None。"""
+    if _events_table_present(db_path):
+        return None
+    print(
+        f"[run] 台账库 {db_path} 缺少 events 表（尚未初始化），事件留痕将无法落库。\n"
+        f"      请先执行：python -m mmagent.cli db init --db {db_path}",
+        file=sys.stderr)
+    return 3
+
+
+# `--conflicts` / `--sanity-blocking` 是**模拟开关**（真实待审材料应由上层注入）；
+# 未显式提供明细时，用与项目已知数据问题（README §9）一致的示例材料，便于人工看到"该审什么"。
+_DEFAULT_CONFLICTS_REVIEW = [
+    {"field": "评级",
+     "reason": "同构外推列口径冲突（示例，见 README §9 已知数据问题 #3）",
+     "candidates": ["qual_1_2_7_8_10", "def_7_8"]},
+]
+_DEFAULT_SANITY_REVIEW = [
+    {"check": "unit_mismatch",
+     "detail": "示例：单位/量纲不一致，需人工裁决后继续"},
+]
+
+
+def _parse_review_json(text: str, label: str):
+    """解析可选的待审材料 JSON；非法时打印错误并返回 (None, 2)，合法返回 (值, None)。"""
+    try:
+        return json.loads(text), None
+    except json.JSONDecodeError as exc:
+        print(f"[run] --{label} 不是合法 JSON：{exc}", file=sys.stderr)
+        return None, 2
+
+
+def cmd_run_start(args) -> int:
+    """启动一次运行；命中人工卡点属**正常状态** → exit 0 并打印结构化 JSON。"""
+    from .agents.coordinator import CheckpointUnavailable, Coordinator
+
+    code = _require_ledger(args.db)
+    if code is not None:
+        return code
+    context: dict = {}
+    if args.conflicts:
+        context["caliber_conflicts"] = True
+        if args.conflict_detail:
+            detail, err = _parse_review_json(args.conflict_detail, "conflict-detail")
+            if err is not None:
+                return err
+            context["conflicts"] = detail
+        else:
+            context["conflicts"] = _DEFAULT_CONFLICTS_REVIEW
+    if args.sanity_blocking:
+        context["sanity_blocking"] = True
+        if args.sanity_detail:
+            detail, err = _parse_review_json(args.sanity_detail, "sanity-detail")
+            if err is not None:
+                return err
+            context["sanity_items"] = detail
+    try:
+        coord = Coordinator(db_path=args.db, ckpt_path=args.ckpt)
+    except CheckpointUnavailable as exc:
+        print(f"[run start] {exc}", file=sys.stderr)
+        return 3
+    try:
+        status = coord.start(args.run_id, context)
+    except CheckpointUnavailable as exc:
+        print(f"[run start] {exc}", file=sys.stderr)
+        return 3
+    finally:
+        coord.close()
+    print(json.dumps(status.to_dict(), ensure_ascii=False))
+    return 0
+
+
+def cmd_run_resume(args) -> int:
+    """投递人工裁定恢复；裁定非法/投错 gate → exit 2；台账库未初始化/检查点库不可用 → exit 3。"""
+    from .agents.coordinator import CheckpointUnavailable, Coordinator, InvalidGateDecision
+
+    code = _require_ledger(args.db)
+    if code is not None:
+        return code
+    try:
+        decision = json.loads(args.decision)
+    except json.JSONDecodeError as exc:
+        print(f"[run resume] decision 不是合法 JSON：{exc}", file=sys.stderr)
+        return 2
+    try:
+        coord = Coordinator(db_path=args.db, ckpt_path=args.ckpt)
+    except CheckpointUnavailable as exc:
+        print(f"[run resume] {exc}", file=sys.stderr)
+        return 3
+    try:
+        status = coord.resume(args.run_id, args.gate, decision)
+    except InvalidGateDecision as exc:
+        print(f"[run resume] {exc}", file=sys.stderr)
+        return 2
+    except CheckpointUnavailable as exc:
+        print(f"[run resume] {exc}", file=sys.stderr)
+        return 3
+    finally:
+        coord.close()
+    print(json.dumps(status.to_dict(), ensure_ascii=False))
+    return 0
+
+
+def cmd_run_status(args) -> int:
+    """打印当前阶段与是否挂起（不推进图）；run_id 不存在 → exit 4。"""
+    from .agents.coordinator import CheckpointUnavailable, Coordinator, UnknownRunError
+
+    code = _require_ledger(args.db)
+    if code is not None:
+        return code
+    try:
+        coord = Coordinator(db_path=args.db, ckpt_path=args.ckpt)
+    except CheckpointUnavailable as exc:
+        print(f"[run status] {exc}", file=sys.stderr)
+        return 3
+    try:
+        status = coord.status(args.run_id)
+    except UnknownRunError as exc:
+        print(f"[run status] {exc}", file=sys.stderr)
+        return 4
+    except CheckpointUnavailable as exc:
+        print(f"[run status] {exc}", file=sys.stderr)
+        return 3
+    finally:
+        coord.close()
+    print(json.dumps(status.to_dict(), ensure_ascii=False))
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     """构造 argparse 解析器。"""
     parser = argparse.ArgumentParser(prog="mmagent", description="数模协作 Agent CLI")
@@ -208,6 +370,36 @@ def build_parser() -> argparse.ArgumentParser:
     p_des.add_argument("--mask-out", default="", help="脱敏副本输出路径（可选）")
     p_des.add_argument("--db", default="data/mm.db", help="命中台账数据库路径")
     p_des.set_defaults(func=cmd_desensitize_check)
+
+    p_run = sub.add_parser("run", help="人机回环运行（LangGraph interrupt + SqliteSaver）")
+    run_sub = p_run.add_subparsers(dest="run_command", required=True)
+
+    p_run_start = run_sub.add_parser("start", help="启动一次运行，遇卡点即挂起（exit 0）")
+    p_run_start.add_argument("--run-id", required=True, help="运行 id（= langgraph thread_id）")
+    p_run_start.add_argument("--conflicts", action="store_true", help="注入口径冲突（触发卡点1）")
+    p_run_start.add_argument("--conflict-detail", default="",
+                             help="口径冲突待审材料（JSON，可选；缺省用内置示例）")
+    p_run_start.add_argument("--sanity-blocking", action="store_true",
+                             help="注入 sanity 阻断（触发卡点2）")
+    p_run_start.add_argument("--sanity-detail", default="",
+                             help="sanity 阻断待审材料（JSON，可选）")
+    p_run_start.add_argument("--ckpt", default="data/checkpoints.db", help="检查点库路径")
+    p_run_start.add_argument("--db", default="data/mm.db", help="事件台账库路径")
+    p_run_start.set_defaults(func=cmd_run_start)
+
+    p_run_resume = run_sub.add_parser("resume", help="投递人工裁定，从挂起点恢复")
+    p_run_resume.add_argument("--run-id", required=True, help="运行 id（= langgraph thread_id）")
+    p_run_resume.add_argument("--gate", required=True, help="卡点名（须与当前挂起一致）")
+    p_run_resume.add_argument("--decision", required=True, help="JSON 字符串裁定")
+    p_run_resume.add_argument("--ckpt", default="data/checkpoints.db", help="检查点库路径")
+    p_run_resume.add_argument("--db", default="data/mm.db", help="事件台账库路径")
+    p_run_resume.set_defaults(func=cmd_run_resume)
+
+    p_run_status = run_sub.add_parser("status", help="查看当前阶段与是否挂起")
+    p_run_status.add_argument("--run-id", required=True, help="运行 id（= langgraph thread_id）")
+    p_run_status.add_argument("--ckpt", default="data/checkpoints.db", help="检查点库路径")
+    p_run_status.add_argument("--db", default="data/mm.db", help="事件台账库路径")
+    p_run_status.set_defaults(func=cmd_run_status)
     return parser
 
 

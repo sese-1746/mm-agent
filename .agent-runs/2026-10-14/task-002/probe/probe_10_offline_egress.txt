@@ -1,0 +1,27 @@
+======================================================================
+1) 导入链中是否引入 requests / langsmith / socket 相关模块
+======================================================================
+  langsmith            in sys.modules = True
+  requests             in sys.modules = True
+  urllib.request       in sys.modules = True
+  http.client          in sys.modules = True
+  socket               in sys.modules = True
+  langchain_core       in sys.modules = True
+  langgraph            in sys.modules = True
+  httpx                in sys.modules = True
+
+======================================================================
+2) 跑一次带 interrupt + resume 的图，看是否有 socket 连接尝试
+======================================================================
+
+======================================================================
+3) 结论材料
+======================================================================
+  socket 连接尝试次数 = 0
+  连接尝试明细       = []
+  LANGSMITH 相关环境变量：
+    LANG = 'en_US.UTF-8'
+    OLLAMA_HOST = '0.0.0.0'
+    OLLAMA_MODELS = 'H:\\OllamaImagers'
+    OLLAMA_ORIGINS = '*'
+  (无输出表示未设置 LANGSMITH_* 环境变量 → 追踪默认关闭)
