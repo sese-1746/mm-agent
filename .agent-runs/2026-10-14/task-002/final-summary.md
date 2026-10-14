@@ -50,6 +50,13 @@
     原生 sqlite3 直读 `checkpoints`/`writes` 表；真实硬杀跨进程恢复；非法裁定拦截 + 对照复现 `UnboundLocalError`；
     并发 4 轮跨台 = 0。
   - 追加发现（见 KNOWN_ISSUES）：**并发双进程同时恢复同一 run 时 `pre_export_compliance` 的 `gate_paused` 会被写 2 条**（4 轮 3 命中；顺序流程仍恒为 1 条）。
+- **提交后对「已提交树」的复核（因发现一次意外源码改动，见下）**：**PASS**
+  - 全量 `pytest tests` 重跑 → **253 passed / 1 xfailed / EXIT=0**（`probe/recheck_committed.txt`）。
+  - 队长核心探针重跑 → `LEAD-CORE RESULT: PASS`（`probe/lead_verify_core.recheck.txt`）。
+  - ⚠️ **意外改动说明（如实记录）**：`mmagent/agents/coordinator.py` 与 `mmagent/cli.py` 在磁盘上的 mtime 为 **19:23:47**（晚于本轮首轮测试与 Vic 验证），内容相较提交 `ca5fb64` 有 **3 行语义差异**：
+    `RunStatus.review` 类型注解 `dict | None` → `dict | list | None`；`cmd_run_start` 增补 `else: context["sanity_items"] = _DEFAULT_SANITY_REVIEW`。
+    **未查明写入来源**（疑为上一会话余留的自动化成员/并发写入）；改动方向与修复轮 2（F2 review payload）一致、逻辑自洽、`_DEFAULT_SANITY_REVIEW` 定义齐全。
+    为不采信「未测即入库」，已在改动后**对已提交树整树重跑全量测试与队长探针，均 PASS**（见上），故本轮交付有效性以**该次重跑**为准。
 
 ## REPORTS
 
