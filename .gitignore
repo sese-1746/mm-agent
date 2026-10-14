@@ -1,0 +1,41 @@
+# ---- 虚拟环境 ----
+.venv/
+venv/
+env/
+
+# ---- Python ----
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.eggs/
+build/
+dist/
+.pytest_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+
+# ---- 本地运行时数据（数据库由 `cli db init` 重建，不入库）----
+data/*.db
+data/*.db-wal
+data/*.db-shm
+
+# ---- 运行时冒烟产物与临时探针（保留 artifacts/intake 与 artifacts/reports）----
+artifacts/runs/
+artifacts/tmp/
+*.tmp
+
+# ---- 工作区内部元数据（不删除，仅不入库）----
+.workbuddy/
+
+# ---- 误生成的 0 字节杂散文件（2026-10-13 CLI 测试残留，不纳入版本库）----
+/human
+
+# ---- 编辑器 / 系统 ----
+.idea/
+.vscode/
+*.swp
+.DS_Store
+Thumbs.db
+desktop.ini

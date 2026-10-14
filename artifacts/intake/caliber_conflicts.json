@@ -1,0 +1,458 @@
+{
+  "conflicts": [
+    {
+      "conflict_id": "C002",
+      "conflict_type": "definition",
+      "field_base": "N月（单列月份）",
+      "variants": [
+        "全量汇总表",
+        "公司发现各门店问题数量",
+        "各门店客户投诉量",
+        "各门店客户满意度综合得分"
+      ],
+      "tables": [
+        "att1_satisfaction",
+        "att4_complaint",
+        "att5_complaint",
+        "summary_master"
+      ],
+      "evidence_rows": [
+        {
+          "source_file": "总表.xlsx",
+          "sheet": "A题 (2)",
+          "excel_row": 2,
+          "field_name": "1月",
+          "store": "A1",
+          "value": "100"
+        },
+        {
+          "source_file": "总表.xlsx",
+          "sheet": "A题 (2)",
+          "excel_row": 3,
+          "field_name": "1月",
+          "store": "A2",
+          "value": "95.2"
+        },
+        {
+          "source_file": "总表.xlsx",
+          "sheet": "A题 (2)",
+          "excel_row": 4,
+          "field_name": "1月",
+          "store": "A3",
+          "value": "95.2"
+        },
+        {
+          "source_file": "总表.xlsx",
+          "sheet": "A题 (2)",
+          "excel_row": 2,
+          "field_name": "2月",
+          "store": "A1",
+          "value": "100"
+        },
+        {
+          "source_file": "总表.xlsx",
+          "sheet": "A题 (2)",
+          "excel_row": 3,
+          "field_name": "2月",
+          "store": "A2",
+          "value": "94.8"
+        },
+        {
+          "source_file": "总表.xlsx",
+          "sheet": "A题 (2)",
+          "excel_row": 4,
+          "field_name": "2月",
+          "store": "A3",
+          "value": "97.5"
+        },
+        {
+          "source_file": "总表.xlsx",
+          "sheet": "A题 (2)",
+          "excel_row": 2,
+          "field_name": "3月",
+          "store": "A1",
+          "value": "99.8"
+        },
+        {
+          "source_file": "总表.xlsx",
+          "sheet": "A题 (2)",
+          "excel_row": 3,
+          "field_name": "3月",
+          "store": "A2",
+          "value": "100"
+        },
+        {
+          "source_file": "总表.xlsx",
+          "sheet": "A题 (2)",
+          "excel_row": 4,
+          "field_name": "3月",
+          "store": "A3",
+          "value": "94.2"
+        }
+      ],
+      "suggested_caliber": "按各自考核定义独立建模；若需合并须先统一口径",
+      "evidence": [],
+      "message": "同名字段「N月（单列月份）」在 全量汇总表、公司发现各门店问题数量、各门店客户投诉量、各门店客户满意度综合得分 中是不同的考核/统计口径（同名不同义），跨表按名合并会得出错误结论"
+    },
+    {
+      "conflict_id": "C003",
+      "conflict_type": "unit",
+      "field_base": "N月（单列月份）",
+      "variants": [
+        "(无单位)",
+        "个数",
+        "分",
+        "次数"
+      ],
+      "tables": [
+        "att1_satisfaction",
+        "att4_complaint",
+        "att5_complaint",
+        "summary_master"
+      ],
+      "evidence_rows": [
+        {
+          "source_file": "总表.xlsx",
+          "sheet": "A题 (2)",
+          "excel_row": 2,
+          "field_name": "1月",
+          "store": "A1",
+          "value": "100"
+        },
+        {
+          "source_file": "总表.xlsx",
+          "sheet": "A题 (2)",
+          "excel_row": 3,
+          "field_name": "1月",
+          "store": "A2",
+          "value": "95.2"
+        },
+        {
+          "source_file": "总表.xlsx",
+          "sheet": "A题 (2)",
+          "excel_row": 4,
+          "field_name": "1月",
+          "store": "A3",
+          "value": "95.2"
+        },
+        {
+          "source_file": "总表.xlsx",
+          "sheet": "A题 (2)",
+          "excel_row": 2,
+          "field_name": "2月",
+          "store": "A1",
+          "value": "100"
+        },
+        {
+          "source_file": "总表.xlsx",
+          "sheet": "A题 (2)",
+          "excel_row": 3,
+          "field_name": "2月",
+          "store": "A2",
+          "value": "94.8"
+        },
+        {
+          "source_file": "总表.xlsx",
+          "sheet": "A题 (2)",
+          "excel_row": 4,
+          "field_name": "2月",
+          "store": "A3",
+          "value": "97.5"
+        },
+        {
+          "source_file": "总表.xlsx",
+          "sheet": "A题 (2)",
+          "excel_row": 2,
+          "field_name": "3月",
+          "store": "A1",
+          "value": "99.8"
+        },
+        {
+          "source_file": "总表.xlsx",
+          "sheet": "A题 (2)",
+          "excel_row": 3,
+          "field_name": "3月",
+          "store": "A2",
+          "value": "100"
+        },
+        {
+          "source_file": "总表.xlsx",
+          "sheet": "A题 (2)",
+          "excel_row": 4,
+          "field_name": "3月",
+          "store": "A3",
+          "value": "94.2"
+        }
+      ],
+      "suggested_caliber": "统一单位或标注换算系数",
+      "evidence": [],
+      "message": "同名字段「N月（单列月份）」跨附件单位不一致：(无单位) / 个数 / 分 / 次数"
+    },
+    {
+      "conflict_id": "C004",
+      "conflict_type": "definition",
+      "field_base": "得分",
+      "variants": [
+        "float",
+        "str"
+      ],
+      "tables": [
+        "att2_service",
+        "att3_clean"
+      ],
+      "evidence_rows": [
+        {
+          "source_file": "附件3 各门店车辆清洁得分-A题.xls",
+          "sheet": "Sheet1",
+          "excel_row": 12,
+          "field_name": "10月.得分",
+          "store": "B5",
+          "value": "97.3.4"
+        },
+        {
+          "source_file": "附件3 各门店车辆清洁得分-A题.xls",
+          "sheet": "Sheet1",
+          "excel_row": 38,
+          "field_name": "10月.得分",
+          "store": "B31",
+          "value": "97.3.4"
+        },
+        {
+          "source_file": "附件3 各门店车辆清洁得分-A题.xls",
+          "sheet": "Sheet1",
+          "excel_row": 39,
+          "field_name": "10月.得分",
+          "store": "B32",
+          "value": "97.3.4"
+        },
+        {
+          "source_file": "附件3 各门店车辆清洁得分-A题.xls",
+          "sheet": "Sheet1",
+          "excel_row": 41,
+          "field_name": "10月.得分",
+          "store": "B34",
+          "value": "97.3.4"
+        },
+        {
+          "source_file": "附件3 各门店车辆清洁得分-A题.xls",
+          "sheet": "Sheet1",
+          "excel_row": 114,
+          "field_name": "10月.得分",
+          "store": "B107",
+          "value": "97.3.4"
+        },
+        {
+          "source_file": "附件3 各门店车辆清洁得分-A题.xls",
+          "sheet": "Sheet1",
+          "excel_row": 121,
+          "field_name": "10月.得分",
+          "store": "B114",
+          "value": "97.3.4"
+        },
+        {
+          "source_file": "附件3 各门店车辆清洁得分-A题.xls",
+          "sheet": "Sheet1",
+          "excel_row": 148,
+          "field_name": "10月.得分",
+          "store": "C21",
+          "value": "97.3.4"
+        },
+        {
+          "source_file": "附件3 各门店车辆清洁得分-A题.xls",
+          "sheet": "Sheet1",
+          "excel_row": 6,
+          "field_name": "11月.得分",
+          "store": "A4",
+          "value": "97.3.4"
+        }
+      ],
+      "suggested_caliber": "确认数值列类型（清理文本混入值或统一为字符串）后重算",
+      "evidence": [],
+      "message": "同名字段「得分」跨附件 dtype 不一致：float / str（涉及 各门店服务态度得分, 各门店车辆清洁得分）；其中文本混入单元格 17 处（如 '97.3.4'）"
+    },
+    {
+      "conflict_id": "C006",
+      "conflict_type": "definition",
+      "field_base": "评级",
+      "variants": [
+        "各门店月利润定额及实际利润值",
+        "各门店服务态度得分",
+        "各门店车辆清洁得分"
+      ],
+      "tables": [
+        "att2_service",
+        "att3_clean",
+        "att6_profit"
+      ],
+      "evidence_rows": [
+        {
+          "source_file": "附件2 各门店服务态度得分-A题.xls",
+          "sheet": "Sheet1",
+          "excel_row": 3,
+          "field_name": "1月.评级",
+          "store": "A1",
+          "value": "合格"
+        },
+        {
+          "source_file": "附件2 各门店服务态度得分-A题.xls",
+          "sheet": "Sheet1",
+          "excel_row": 4,
+          "field_name": "1月.评级",
+          "store": "A2",
+          "value": "合格"
+        },
+        {
+          "source_file": "附件2 各门店服务态度得分-A题.xls",
+          "sheet": "Sheet1",
+          "excel_row": 5,
+          "field_name": "1月.评级",
+          "store": "A3",
+          "value": "合格"
+        },
+        {
+          "source_file": "附件2 各门店服务态度得分-A题.xls",
+          "sheet": "Sheet1",
+          "excel_row": 3,
+          "field_name": "2月.评级",
+          "store": "A1",
+          "value": "合格"
+        },
+        {
+          "source_file": "附件2 各门店服务态度得分-A题.xls",
+          "sheet": "Sheet1",
+          "excel_row": 4,
+          "field_name": "2月.评级",
+          "store": "A2",
+          "value": "合格"
+        },
+        {
+          "source_file": "附件2 各门店服务态度得分-A题.xls",
+          "sheet": "Sheet1",
+          "excel_row": 5,
+          "field_name": "2月.评级",
+          "store": "A3",
+          "value": "合格"
+        },
+        {
+          "source_file": "附件2 各门店服务态度得分-A题.xls",
+          "sheet": "Sheet1",
+          "excel_row": 3,
+          "field_name": "3月.评级",
+          "store": "A1",
+          "value": "合格"
+        },
+        {
+          "source_file": "附件2 各门店服务态度得分-A题.xls",
+          "sheet": "Sheet1",
+          "excel_row": 4,
+          "field_name": "3月.评级",
+          "store": "A2",
+          "value": "合格"
+        },
+        {
+          "source_file": "附件2 各门店服务态度得分-A题.xls",
+          "sheet": "Sheet1",
+          "excel_row": 5,
+          "field_name": "3月.评级",
+          "store": "A3",
+          "value": "合格"
+        }
+      ],
+      "suggested_caliber": "按各自考核定义独立建模；若需合并须先统一口径",
+      "evidence": [],
+      "message": "同名字段「评级」在 各门店月利润定额及实际利润值、各门店服务态度得分、各门店车辆清洁得分 中是不同的考核/统计口径（同名不同义），跨表按名合并会得出错误结论"
+    },
+    {
+      "conflict_id": "C007",
+      "conflict_type": "unit",
+      "field_base": "评级",
+      "variants": [
+        "万元",
+        "分"
+      ],
+      "tables": [
+        "att2_service",
+        "att3_clean",
+        "att6_profit"
+      ],
+      "evidence_rows": [
+        {
+          "source_file": "附件2 各门店服务态度得分-A题.xls",
+          "sheet": "Sheet1",
+          "excel_row": 3,
+          "field_name": "1月.评级",
+          "store": "A1",
+          "value": "合格"
+        },
+        {
+          "source_file": "附件2 各门店服务态度得分-A题.xls",
+          "sheet": "Sheet1",
+          "excel_row": 4,
+          "field_name": "1月.评级",
+          "store": "A2",
+          "value": "合格"
+        },
+        {
+          "source_file": "附件2 各门店服务态度得分-A题.xls",
+          "sheet": "Sheet1",
+          "excel_row": 5,
+          "field_name": "1月.评级",
+          "store": "A3",
+          "value": "合格"
+        },
+        {
+          "source_file": "附件2 各门店服务态度得分-A题.xls",
+          "sheet": "Sheet1",
+          "excel_row": 3,
+          "field_name": "2月.评级",
+          "store": "A1",
+          "value": "合格"
+        },
+        {
+          "source_file": "附件2 各门店服务态度得分-A题.xls",
+          "sheet": "Sheet1",
+          "excel_row": 4,
+          "field_name": "2月.评级",
+          "store": "A2",
+          "value": "合格"
+        },
+        {
+          "source_file": "附件2 各门店服务态度得分-A题.xls",
+          "sheet": "Sheet1",
+          "excel_row": 5,
+          "field_name": "2月.评级",
+          "store": "A3",
+          "value": "合格"
+        },
+        {
+          "source_file": "附件2 各门店服务态度得分-A题.xls",
+          "sheet": "Sheet1",
+          "excel_row": 3,
+          "field_name": "3月.评级",
+          "store": "A1",
+          "value": "合格"
+        },
+        {
+          "source_file": "附件2 各门店服务态度得分-A题.xls",
+          "sheet": "Sheet1",
+          "excel_row": 4,
+          "field_name": "3月.评级",
+          "store": "A2",
+          "value": "合格"
+        },
+        {
+          "source_file": "附件2 各门店服务态度得分-A题.xls",
+          "sheet": "Sheet1",
+          "excel_row": 5,
+          "field_name": "3月.评级",
+          "store": "A3",
+          "value": "合格"
+        }
+      ],
+      "suggested_caliber": "统一单位或标注换算系数",
+      "evidence": [],
+      "message": "同名字段「评级」跨附件单位不一致：万元 / 分"
+    }
+  ],
+  "count": 5
+}

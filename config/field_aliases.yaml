@@ -1,0 +1,98 @@
+# FR-2 字段别名表：把各附件的「月份编号列 / 复合表头」映射到统一语义名与 canonical。
+# 代码从本文件读取，禁止在 py 中硬编码映射。
+# 语义命名规则（name_templates）：
+#   - 门店列 → 月份门店
+#   - 单列月份 → "N月"
+#   - 组内多列 → "N月.<role>"（role 取自子表头，或按取值推断 得分/评级）
+version: 1
+
+name_templates:
+  store_column: "月份门店"
+  month: "{month}月"
+  month_metric: "{month}月.{role}"
+  unnamed: "<未命名列#{index}>"
+
+# 表级配置：table_id（文档口径）/ 单位 / canonical base / 指标名
+tables:
+  - match: "总表"
+    table_id: summary_master
+    canonical: summary
+    unit: ""
+    metric: 全量汇总表
+  - match: "附件1"
+    table_id: att1_satisfaction
+    canonical: satisfaction_overall
+    unit: 分
+    metric: 各门店客户满意度综合得分
+  - match: "附件2"
+    table_id: att2_service
+    canonical: service_score
+    unit: 分
+    metric: 各门店服务态度得分
+  - match: "附件3"
+    table_id: att3_clean
+    canonical: clean_score
+    unit: 分
+    metric: 各门店车辆清洁得分
+  - match: "附件4"
+    table_id: att4_complaint
+    canonical: complaint_count
+    unit: 次数
+    metric: 各门店客户投诉量
+  - match: "附件5"
+    table_id: att5_complaint      # 文档口径（docx_dump 原文即 att5_complaint）
+    canonical: problem_count
+    unit: 个数
+    metric: 公司发现各门店问题数量
+  - match: "附件6"
+    table_id: att6_profit          # 文档口径（docx 原文即 att6_profit，无 _quota 后缀）
+    canonical: profit
+    unit: 万元
+    metric: 各门店月利润定额及实际利润值
+
+# 旧/外推 table_id → 文档口径的兼容映射（下游或测试若引用旧名可据此转换）
+legacy_table_ids:
+  att6_profit_quota: att6_profit   # 文档无 _quota 后缀
+  att5_problem: att5_complaint     # 文档用 att5_complaint
+
+# 二级语义（子表头文本 → role / canonical 片段）
+subs:
+  - match: "利润定额"
+    role: 利润定额
+    canonical: profit_quota
+  - match: "实际利润"
+    role: 实际利润
+    canonical: profit_actual
+  - match: "得分"
+    role: 得分
+    canonical: score
+  - match: "评级"
+    role: 评级
+    canonical: qualified
+  - match: "合格"
+    role: 评级
+    canonical: qualified
+
+# 字段级别名（按列名关键词；用于非月份的双语列）
+fields:
+  - match: "满意度"
+    canonical: satisfaction_overall
+  - match: "投诉量"
+    canonical: complaint_count
+  - match: "问题数量"
+    canonical: problem_count
+
+# 表标题声明的「空缺语义」→ fillna_rule（不是缺失，而是 0）
+fillna_hints:
+  - pattern: "空格处为0"
+    rule: "0（表标题声明：空格处即 0，非缺失）"
+  - pattern: "空白为0"
+    rule: "0（表标题声明：空白即 0，非缺失）"
+  - pattern: "空缺为0"
+    rule: "0（表标题声明：空缺即 0，非缺失）"
+
+# spotcheck 用的 canonical 主体名（不带月份后缀）
+spotcheck_canonicals:
+  - satisfaction_overall
+  - complaint_count
+  - profit_actual

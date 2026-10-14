@@ -1,0 +1,35 @@
+# 模型与角色预算配置（本机 Ollama，禁止硬编码到代码里）
+ollama:
+  base_url: http://localhost:11434
+  timeout_s: 300      # 生成整段求解脚本较慢，实测 120s 会截断长代码
+  think: false        # qwen3.5 为思考型模型：开启思考时 content 为空、全部输出落在
+                      # message.thinking（实测 12k 字符后 done_reason=length，JSON 解析必失败），
+                      # 本系统只取严格 JSON，故显式关闭思考
+
+models:
+  generation: qwen3.5:latest      # 主生成模型
+  fallback: qwen3.5:0.8b          # 降级模型（本机无 qwen3:4b，改用 0.8b）
+  embedding: qwen3-embedding      # 向量模型（供 RAG 适配层使用）
+
+# 各角色：温度 / 单次 token 预算 / 单轮任务调用预算
+roles:
+  archivist:
+    temperature: 0.2
+    max_tokens: 2048
+    call_budget: 20
+  planner:
+    temperature: 0.3
+    max_tokens: 4096
+    call_budget: 30
+  coder:
+    temperature: 0.1
+    max_tokens: 8192
+    call_budget: 60
+  assembler:
+    temperature: 0.2
+    max_tokens: 8192
+    call_budget: 40
+  coordinator:
+    temperature: 0.0
+    max_tokens: 1024
+    call_budget: 100

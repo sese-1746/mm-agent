@@ -1,0 +1,44 @@
+# NFR-7 脱敏规则（5 类：手机号/学号/身份证/姓名列/导师信息）
+# 代码从本文件读取规则，禁止在 py 中硬编码正则。
+# 字段说明：
+#   name     规则名（与需求口径一致：phone|student_id|id_card|name_column|advisor）
+#   label    中文名（报告用）
+#   target   cell=逐单元格正则；column=按列头识别的整列脱敏
+#   pattern  单元格正则（target=cell）
+#   contexts 可选：单元格需同时含任一关键词才判定命中（降低误报，留空表示仅凭正则）
+#   header_pattern / cell_pattern  列级规则（target=column）用
+#   mask     命中后替换文本
+version: 1
+
+rules:
+  - name: id_card
+    label: 身份证号
+    target: cell
+    pattern: '(?<![0-9A-Za-z])[1-9]\d{5}(?:19|20)\d{2}(?:0[1-9]|1[0-2])(?:0[1-9]|[12]\d|3[01])\d{3}[0-9Xx](?![0-9A-Za-z])'
+    mask: '[已脱敏]'
+
+  - name: phone
+    label: 手机号
+    target: cell
+    pattern: '(?<!\d)1[3-9]\d{9}(?!\d)'
+    mask: '[已脱敏]'
+
+  - name: student_id
+    label: 学号
+    target: cell
+    pattern: '(?<![0-9A-Za-z])(?:20\d{2}[A-Za-z]?\d{4,8}|\d{10,12})(?![0-9A-Za-z])'
+    contexts: ['学号', '学籍号', '学生编号', 'student_id', 'student id', 'stu_id']
+    mask: '[已脱敏]'
+
+  - name: name_column
+    label: 姓名列
+    target: column
+    header_pattern: '^\s*(姓名|名字|学生姓名|员工姓名|客户姓名|联系人|负责人)\s*$'
+    cell_pattern: '(?:姓\s*名|名字|联系人|负责人)\s*[:：]?\s*[\u4e00-\u9fa5·]{2,4}'
+    mask: '[已脱敏]'
+
+  - name: advisor
+    label: 导师信息
+    target: cell
+    pattern: '(?:导师|指导教师|指导老师|辅导老师|指导者|mentor)\s*[:：]?\s*[\u4e00-\u9fa5·]{2,4}'
+    mask: '[已脱敏]'

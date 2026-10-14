@@ -1,0 +1,15 @@
+# 统一使用 LF，避免 Windows 检出时 CRLF 化导致冻结 md5 基线失效
+# （基线见 .agent-runs/2026-10-13/task-001/PROGRESS.md §1）
+* text=auto eol=lf
+
+# 二进制文件不做换行符转换
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.docx binary
+*.xls binary
+*.xlsx binary
+*.db binary
+*.pdf binary

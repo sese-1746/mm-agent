@@ -1,0 +1,88 @@
+隔离库：H:\mm-agent\.agent-runs\2026-10-13\task-001\fr9_tmp.db（不触碰 data/mm.db）
+
+============================================================================================
+攻击 1：原生 sqlite3 绕过应用层，对 adopted 行 UPDATE / DELETE
+============================================================================================
+[证成    ] 1a: 原生 UPDATE 被 ABORT：adopted immutable（含 'adopted immutable'=True）
+[证成    ] 1b: 原生 DELETE 被 ABORT：adopted immutable（含 'adopted immutable'=True）
+[证成    ] 1c: 全表 DELETE 被 ABORT：adopted immutable
+[证成    ] 1d: 改 status 被 ABORT：adopted immutable
+[证成    ] 1e: 整行快照 before == after：True（行仍在=True）
+[证成    ] 1f: 应用层抛 AdoptedVersionImmutableError：profile P1 v2 已 adopted，禁止修改/删除
+[证成    ] 1g: events 表含 error_code=ADOPTED_IMMUTABLE 记录：True；命中=[{'id': 3, 'event_type': 'error', 'payload': '{"error_code": "ADOPTED_IMMUTABLE", "profile_id": "P1", "version_id": 2}'}]
+[限制    ] 1h: DROP TRIGGER 后 UPDATE 成功 → 不可变性是 DML 级触发器，非防 DDL 篡改（已知限制）
+
+============================================================================================
+攻击 2：连续 write_version ×8 → draft 数 = 5？version_id 严格递增无跳号？
+============================================================================================
+[证成    ] 2a: 8 次写入返回 id=[1, 2, 3, 4, 5, 6, 7, 8]；库内 draft 数=5，draft ids=[4, 5, 6, 7, 8]
+[证成    ] 2b: 写入返回序列严格递增无跳号：True（[1, 2, 3, 4, 5, 6, 7, 8]）
+[证成    ] 2c: 存活 draft 集内部连续：True（[4, 5, 6, 7, 8]）
+[备注    ] 2d: 裁剪导致低号 draft 被物理删除（3 个），故 profile 全历史在表内不连续——这是设计（保留最近 5 版），非可断言缺陷
+
+============================================================================================
+攻击 3：adopt_new_version 后，旧 adopted 行是否零字段被 UPDATE
+============================================================================================
+[证成    ] 3a: 旧 adopted v2 整行未被改：True
+[证成    ] 3b: 旧 adopted v2 status 仍为 'adopted'（设计：靠 version_id 自然退位，未置 'superseded'）
+[证成    ] 3c: 新 adopted v4 为 INSERT 行，supersedes=3（期望 3）
+[备注    ] 3d: P3 全版本链：[{'version_id': 1, 'status': 'draft', 'supersedes': None}, {'version_id': 2, 'status': 'adopted', 'supersedes': 1}, {'version_id': 3, 'status': 'draft', 'supersedes': None}, {'version_id': 4, 'status': 'adopted', 'supersedes': 3}] → 出现多条 status='adopted'（v2 与 v4）
+
+============================================================================================
+攻击 4：N 进程并发各写 5 次 → version_id 无重复无跳号？
+============================================================================================
+[证成    ] 4a: 6 进程共返回 30 个 id；有重复=False
+[证成    ] 4b: 合并后 1..30 连续无跳号：True（首/末=[1, 2, 3]…[28, 29, 30]）
+[证成    ] 4c: 库内实际 version_id 无重复：True；库内=[26, 27, 28, 29, 30]
+[备注    ] 4d: 库内 draft 数=5（裁剪后应≤5）
+
+============================================================================================
+攻击 5：patch / upstream_refs 的 JSON 往返一致性（中文 + 嵌套）
+============================================================================================
+[证成    ] 5a: patch 往返逐键相等：True
+[证成    ] 5b: upstream_refs 往返相等：True
+[备注    ] 5c: 读回 patch={"赛题": "2024 数学建模 A题（校赛）", "嵌套": {"层级": [1, 2, {"深度": "中文值"}], "空": null, "真假": [true, false]}, "列表": ["甲", "乙", {"内": {
+[证成    ] 5d: paths 过滤只返回指定顶层键：['嵌套']
+
+============================================================================================
+攻击 6：用 INSERT OR REPLACE / REPLACE 触发『隐式 DELETE』绕过 adopted 不可变
+============================================================================================
+[打穿    ] 6a: INSERT OR REPLACE 覆盖成功！patch 由 {"k": "orig"} → {"hacked":3}（recursive_triggers=0，隐式 DELETE 未触发 adopted 删除触发器）
+[证成    ] 6b: 开启 recursive_triggers 后 INSERT OR REPLACE 被 ABORT：adopted immutable
+[限制    ] 6c: 原生 INSERT 一条 status='adopted' 的新行未被拦（append-only 允许 INSERT；仅既有 adopted 行不可改）→ read_profile('last') 会返回 v999
+[证成    ] 6d: 候选修复后 INSERT OR REPLACE 被 ABORT：adopted immutable → 修复有效，且不依赖 recursive_triggers
+
+============================================================================================
+汇总
+============================================================================================
+  1a   证成     原生 UPDATE 被 ABORT：adopted immutable（含 'adopted immutable'=True）
+  1b   证成     原生 DELETE 被 ABORT：adopted immutable（含 'adopted immutable'=True）
+  1c   证成     全表 DELETE 被 ABORT：adopted immutable
+  1d   证成     改 status 被 ABORT：adopted immutable
+  1e   证成     整行快照 before == after：True（行仍在=True）
+  1f   证成     应用层抛 AdoptedVersionImmutableError：profile P1 v2 已 adopted，禁止修改/删除
+  1g   证成     events 表含 error_code=ADOPTED_IMMUTABLE 记录：True；命中=[{'id': 3, 'event_type': 'error', 'payload': '{"error_code": "ADOPTED_IMMUTABLE", "profile_id": "P1"
+  1h   限制     DROP TRIGGER 后 UPDATE 成功 → 不可变性是 DML 级触发器，非防 DDL 篡改（已知限制）
+  2a   证成     8 次写入返回 id=[1, 2, 3, 4, 5, 6, 7, 8]；库内 draft 数=5，draft ids=[4, 5, 6, 7, 8]
+  2b   证成     写入返回序列严格递增无跳号：True（[1, 2, 3, 4, 5, 6, 7, 8]）
+  2c   证成     存活 draft 集内部连续：True（[4, 5, 6, 7, 8]）
+  2d   备注     裁剪导致低号 draft 被物理删除（3 个），故 profile 全历史在表内不连续——这是设计（保留最近 5 版），非可断言缺陷
+  3a   证成     旧 adopted v2 整行未被改：True
+  3b   证成     旧 adopted v2 status 仍为 'adopted'（设计：靠 version_id 自然退位，未置 'superseded'）
+  3c   证成     新 adopted v4 为 INSERT 行，supersedes=3（期望 3）
+  3d   备注     P3 全版本链：[{'version_id': 1, 'status': 'draft', 'supersedes': None}, {'version_id': 2, 'status': 'adopted', 'supersedes': 1}, {'version_id': 3, 'status'
+  4a   证成     6 进程共返回 30 个 id；有重复=False
+  4b   证成     合并后 1..30 连续无跳号：True（首/末=[1, 2, 3]…[28, 29, 30]）
+  4c   证成     库内实际 version_id 无重复：True；库内=[26, 27, 28, 29, 30]
+  4d   备注     库内 draft 数=5（裁剪后应≤5）
+  5a   证成     patch 往返逐键相等：True
+  5b   证成     upstream_refs 往返相等：True
+  5c   备注     读回 patch={"赛题": "2024 数学建模 A题（校赛）", "嵌套": {"层级": [1, 2, {"深度": "中文值"}], "空": null, "真假": [true, false]}, "列表": ["甲", "乙", {"内": {
+  5d   证成     paths 过滤只返回指定顶层键：['嵌套']
+  6a   打穿     INSERT OR REPLACE 覆盖成功！patch 由 {"k": "orig"} → {"hacked":3}（recursive_triggers=0，隐式 DELETE 未触发 adopted 删除触发器）
+  6b   证成     开启 recursive_triggers 后 INSERT OR REPLACE 被 ABORT：adopted immutable
+  6c   限制     原生 INSERT 一条 status='adopted' 的新行未被拦（append-only 允许 INSERT；仅既有 adopted 行不可改）→ read_profile('last') 会返回 v999
+  6d   证成     候选修复后 INSERT OR REPLACE 被 ABORT：adopted immutable → 修复有效，且不依赖 recursive_triggers
+
+打穿/失败项：['6a']
+证成项：['1a', '1b', '1c', '1d', '1e', '1f', '1g', '2a', '2b', '2c', '3a', '3b', '3c', '4a', '4b', '4c', '5a', '5b', '5d', '6b', '6d']

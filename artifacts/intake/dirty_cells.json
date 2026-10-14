@@ -1,0 +1,175 @@
+{
+  "dirty_cells": [
+    {
+      "table_id": "att3_clean",
+      "source_file": "附件3 各门店车辆清洁得分-A题.xls",
+      "sheet": "Sheet1",
+      "excel_row": 12,
+      "column": "T",
+      "field_name": "10月.得分",
+      "value": "97.3.4",
+      "store": "B5"
+    },
+    {
+      "table_id": "att3_clean",
+      "source_file": "附件3 各门店车辆清洁得分-A题.xls",
+      "sheet": "Sheet1",
+      "excel_row": 38,
+      "column": "T",
+      "field_name": "10月.得分",
+      "value": "97.3.4",
+      "store": "B31"
+    },
+    {
+      "table_id": "att3_clean",
+      "source_file": "附件3 各门店车辆清洁得分-A题.xls",
+      "sheet": "Sheet1",
+      "excel_row": 39,
+      "column": "T",
+      "field_name": "10月.得分",
+      "value": "97.3.4",
+      "store": "B32"
+    },
+    {
+      "table_id": "att3_clean",
+      "source_file": "附件3 各门店车辆清洁得分-A题.xls",
+      "sheet": "Sheet1",
+      "excel_row": 41,
+      "column": "T",
+      "field_name": "10月.得分",
+      "value": "97.3.4",
+      "store": "B34"
+    },
+    {
+      "table_id": "att3_clean",
+      "source_file": "附件3 各门店车辆清洁得分-A题.xls",
+      "sheet": "Sheet1",
+      "excel_row": 114,
+      "column": "T",
+      "field_name": "10月.得分",
+      "value": "97.3.4",
+      "store": "B107"
+    },
+    {
+      "table_id": "att3_clean",
+      "source_file": "附件3 各门店车辆清洁得分-A题.xls",
+      "sheet": "Sheet1",
+      "excel_row": 121,
+      "column": "T",
+      "field_name": "10月.得分",
+      "value": "97.3.4",
+      "store": "B114"
+    },
+    {
+      "table_id": "att3_clean",
+      "source_file": "附件3 各门店车辆清洁得分-A题.xls",
+      "sheet": "Sheet1",
+      "excel_row": 148,
+      "column": "T",
+      "field_name": "10月.得分",
+      "value": "97.3.4",
+      "store": "C21"
+    },
+    {
+      "table_id": "att3_clean",
+      "source_file": "附件3 各门店车辆清洁得分-A题.xls",
+      "sheet": "Sheet1",
+      "excel_row": 6,
+      "column": "V",
+      "field_name": "11月.得分",
+      "value": "97.3.4",
+      "store": "A4"
+    },
+    {
+      "table_id": "att3_clean",
+      "source_file": "附件3 各门店车辆清洁得分-A题.xls",
+      "sheet": "Sheet1",
+      "excel_row": 23,
+      "column": "V",
+      "field_name": "11月.得分",
+      "value": "97.3.4",
+      "store": "B16"
+    },
+    {
+      "table_id": "att3_clean",
+      "source_file": "附件3 各门店车辆清洁得分-A题.xls",
+      "sheet": "Sheet1",
+      "excel_row": 43,
+      "column": "V",
+      "field_name": "11月.得分",
+      "value": "97.3.4",
+      "store": "B36"
+    },
+    {
+      "table_id": "att3_clean",
+      "source_file": "附件3 各门店车辆清洁得分-A题.xls",
+      "sheet": "Sheet1",
+      "excel_row": 113,
+      "column": "V",
+      "field_name": "11月.得分",
+      "value": "97.3.4",
+      "store": "B106"
+    },
+    {
+      "table_id": "att3_clean",
+      "source_file": "附件3 各门店车辆清洁得分-A题.xls",
+      "sheet": "Sheet1",
+      "excel_row": 134,
+      "column": "V",
+      "field_name": "11月.得分",
+      "value": "97.3.4",
+      "store": "C7"
+    },
+    {
+      "table_id": "att3_clean",
+      "source_file": "附件3 各门店车辆清洁得分-A题.xls",
+      "sheet": "Sheet1",
+      "excel_row": 33,
+      "column": "X",
+      "field_name": "12月.得分",
+      "value": "97.3.4",
+      "store": "B26"
+    },
+    {
+      "table_id": "att3_clean",
+      "source_file": "附件3 各门店车辆清洁得分-A题.xls",
+      "sheet": "Sheet1",
+      "excel_row": 60,
+      "column": "X",
+      "field_name": "12月.得分",
+      "value": "97.3.4",
+      "store": "B53"
+    },
+    {
+      "table_id": "att3_clean",
+      "source_file": "附件3 各门店车辆清洁得分-A题.xls",
+      "sheet": "Sheet1",
+      "excel_row": 109,
+      "column": "X",
+      "field_name": "12月.得分",
+      "value": "97.3.4",
+      "store": "B102"
+    },
+    {
+      "table_id": "att3_clean",
+      "source_file": "附件3 各门店车辆清洁得分-A题.xls",
+      "sheet": "Sheet1",
+      "excel_row": 138,
+      "column": "X",
+      "field_name": "12月.得分",
+      "value": "97.3.4",
+      "store": "C11"
+    },
+    {
+      "table_id": "att3_clean",
+      "source_file": "附件3 各门店车辆清洁得分-A题.xls",
+      "sheet": "Sheet1",
+      "excel_row": 139,
+      "column": "X",
+      "field_name": "12月.得分",
+      "value": "97.3.4",
+      "store": "C12"
+    }
+  ],
+  "count": 17
+}

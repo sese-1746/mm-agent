@@ -1,0 +1,13 @@
+{
+  "skipped_files": [
+    {
+      "file": "预处理-有资格月度.xlsx",
+      "reason": "不在 FR-2 黄金输入白名单内（config/intake_scope.yaml），属预处理参考材料"
+    },
+    {
+      "file": "预处理2-排名及其获奖名单.xlsx",
+      "reason": "不在 FR-2 黄金输入白名单内（config/intake_scope.yaml），属预处理参考材料"
+    }
+  ],
+  "count": 2
+}
