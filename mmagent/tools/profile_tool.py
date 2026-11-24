@@ -25,3 +25,9 @@ def read(profile_id: str, version: str | int = "last",
          db_path: str | Path = profile_store.DEFAULT_DB_PATH) -> dict:
     """读取档案版本内容（version='last' 取最新 adopted）。"""
     return profile_store.read_profile(profile_id, version, paths, db_path)
+
+
+def list_versions(profile_id: str,
+                  db_path: str | Path = profile_store.DEFAULT_DB_PATH) -> list[dict]:
+    """列出档案全部版本（按 version_id 降序）；档案不存在抛 KeyError。"""
+    return profile_store.list_versions(profile_id, db_path)

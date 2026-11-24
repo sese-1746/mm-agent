@@ -1,12 +1,16 @@
-# mmagent 依赖清单（按 H:\mm-agent\.venv 实际已装版本锁定）
+# mmagent 依赖清单（按开发环境实际已装版本锁定）
 fastapi==0.115.6
+starlette==0.41.3
 uvicorn==0.54.0
 pandas==3.0.6
+numpy==2.5.4
 xlrd==2.0.2
 openpyxl==3.1.5
 matplotlib==3.11.2
+Pillow==12.3.0
 python-docx==1.2.0
 pydantic==2.14.1
+typing_extensions==4.16.0
 PyYAML==6.0.3
 httpx==0.28.1
 Jinja2==3.1.6
@@ -34,3 +38,7 @@ httpx2==2.13.1
 httpcore2==2.13.1
 # ⚠️ 副作用：langgraph-sdk/langsmith 把 websockets 从 17.2 拉低到 16.1.1（项目无声明消费者）
 websockets==16.1.1
+
+# --- 第 27 轮 task-002 甲方案：真题文本抽取（纯本地 PDF 文本层，零联网零 LLM）---
+# wheel 已落地 deploy/wheelhouse/pypdf-6.21.1-py3-none-any.whl，离线可装
+pypdf==6.21.1

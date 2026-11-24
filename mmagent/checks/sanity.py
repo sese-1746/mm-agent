@@ -15,6 +15,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
+from .units import check_units
+
 # (关键词元组, min, max)
 _BUILTIN_RANGES = [
     (("得分", "score"), 0, 100),
@@ -106,6 +108,10 @@ def run_sanity_checks(result_tables: dict, rules: list[dict] | None = None) -> S
                 violations.append(_violation(
                     "row_count_match", ",".join(counts), "", [],
                     f"表间行数不一致：{counts}", blocking))
+
+    # ---- 量纲检查（FR-5 / 规划书 §3.5.1第1项）：独立模块，规则走 rules 里 name=="units"
+    unit_rules = [r for r in (rules or []) if r.get("name") == "units"]
+    violations.extend(check_units(result_tables, unit_rules))
 
     blocking = any(v["blocking"] for v in violations)
     return SanityReport(passed=not violations, violations=violations, blocking=blocking)

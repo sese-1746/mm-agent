@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="dark">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>数模论文工作台 · mmagent</title>
+  <!-- 全部样式/脚本/图形均取自本仓库，不引外站资源；页面只与本机 127.0.0.1 上的 /api/v1/* 通信。
+       模型推理由后端按名单制白名单出网（默认 DashScope，可切回本机 Ollama）。
+       vendor/pico.min.css 仅作表单/表格基线，视觉主体由 assets/style.css 覆盖。 -->
+  <link rel="stylesheet" href="vendor/pico.min.css">
+  <link rel="stylesheet" href="assets/style.css">
+  <!-- favicon：内联 data-URI SVG（不新增文件、不引外站）。
+       缺它时浏览器会自动请求 /favicon.ico → 404，控制台每次开页都留一条红色错误，
+       NFR-6 可用性走查就是这么发现的。图形沿用首页「运行总览」的方形徽标配色。 -->
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%23131a24'/%3E%3Cpath d='M8 22V10h3.2l3.4 6 3.4-6H23v12h-3v-6.6l-2.8 5h-2.4L12 15.4V22z' fill='%2358a6ff'/%3E%3C/svg%3E">
+</head>
+<body>
+  <!-- 素描底纹：内联 SVG 线稿（不引任何外部图片/字体）。装饰层，对读屏隐藏。 -->
+  <svg class="sketch" viewBox="0 0 520 520" aria-hidden="true" focusable="false">
+    <g fill="none" stroke="currentColor" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M118 500H404"/>
+      <path d="M262 500C259 430 264 366 259 306c-4-52 3-94 12-126"/>
+      <path d="M259 306c-25-6-52-27-62-56 27-5 55 16 62 56z"/>
+      <path d="M261 306c26-8 52-30 61-59-27-4-54 18-61 59z"/>
+      <path d="M258 396c-24-5-48-24-58-51 25-5 51 14 58 51z"/>
+      <path d="M262 396c25-7 49-27 57-54-26-4-51 16-57 54z"/>
+      <path d="M258 452c-20-4-40-20-49-42 21-4 43 12 49 42z"/>
+      <path d="M263 452c21-6 41-23 48-45-22-3-43 13-48 45z"/>
+      <path d="M260 180c-17-10-28-30-27-52 20 6 31 28 27 52z"/>
+      <path d="M264 180c17-11 27-31 25-52-20 7-29 29-25 52z"/>
+      <path d="M262 128c-9-14-9-33 1-47 11 14 11 33-1 47z"/>
+      <path d="M196 500c-3-16-3-30 2-43M330 500c3-17 3-31-2-44"/>
+      <circle cx="262" cy="96" r="7"/>
+      <circle cx="243" cy="118" r="5"/>
+      <circle cx="282" cy="120" r="4"/>
+    </g>
+  </svg>
+
+  <header class="topbar">
+    <a class="brand" href="#/" title="数模论文工作台首页">
+      <span class="brand-code">00–03</span>
+    <span class="brand-name">数模论文工作台</span>
+    </a>
+    <nav class="tabs" id="tabs" aria-label="模块导航"><!-- 由 app.js 按 TABS 渲染 --></nav>
+    <div class="topbar-right" id="theme-slot"><!-- 主题切换按钮 --></div>
+  </header>
+
+  <main class="stage" id="app">
+    <p class="muted">正在加载…（若长时间无响应，请确认已在仓库根目录执行
+      <code>python -m mmagent.cli serve</code> 或 <code>python run.py</code>）</p>
+  </main>
+
+  <script type="module" src="assets/app.js"></script>
+</body>
+</html>

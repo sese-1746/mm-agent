@@ -1,4 +1,65 @@
-# 模型与角色预算配置（本机 Ollama，禁止硬编码到代码里）
+# 模型与角色预算配置（模型名/端点/预算一律走本文件，禁止硬编码到代码里）
+#
+# provider: 运行时后端。dashscope=阿里云（默认）| ollama=本机离线兜底（可一键切回）
+# 出网仅限 net_allowlist 中的 host（由 `cli netguard-check` 名单制机检）。
+provider: dashscope
+
+# ---------------- 阿里云 DashScope（OpenAI 兼容端点） ----------------
+# 免费额度：实测 2026-10-16 本账号下 qwen-plus 调用 HTTP 200、usage 正常（见
+# .agent-runs/2026-10-16/task-001/probe/dashscope_probe_1.json）。密钥只从环境变量
+# DASHSCOPE_API_KEY 读取（缺失显式报错，不静默回退 Ollama）。
+dashscope:
+  base_url: https://dashscope.aliyuncs.com/compatible-mode/v1
+  model_generation: qwen-plus   # 实测可用：HTTP 200 / 0.433s（2026-10-16）
+  model_fallback: qwen-max      # 本账号 /models 清单内（176 个模型）；生成失败时降级
+  embedding: qwen3.7-text-embedding
+  timeout_s: 300                # 生成整段求解脚本较慢（与 Ollama 分支同值）
+  # NFR-7 脱敏前置：云调用**之前**对 messages 跑五类模式扫描
+  #   on_hit: block=命中即阻断（默认）| mask=掩码后继续送云
+  desensitize:
+    on_hit: block
+  # 各角色：温度 / 单次 token 预算 / 单轮任务调用预算（优先于顶层 roles）
+  roles:
+    archivist:
+      temperature: 0.2
+      max_tokens: 2048
+      call_budget: 20
+    planner:
+      temperature: 0.3
+      max_tokens: 4096
+      call_budget: 30
+    coder:
+      temperature: 0.1
+      max_tokens: 8192
+      call_budget: 60
+    assembler:
+      temperature: 0.2
+      max_tokens: 8192
+      call_budget: 40
+    coordinator:
+      temperature: 0.0
+      max_tokens: 1024
+      call_budget: 100
+
+# ---------------- 出网白名单（netguard-check「名单制」） ----------------
+# 产品代码里出现的任何绝对 URL host 必须在此表内，否则判违规。
+net_allowlist:
+  - 127.0.0.1
+  - localhost
+  - dashscope.aliyuncs.com
+
+# ---------------- 原语 import 禁令的**显式豁免**（默认空；A0-8 口径，2026-10-16） ----------------
+# 口径（三条，见 `mmagent/cli.py::cmd_netguard_check` docstring 与 ROADMAP §6）：
+#   ① URL-host 违规规则 → 仅产品代码，决定 EXIT；
+#   ② 原始网络原语 import 禁令（socket/ftplib/http/urllib.request|error）→ 产品与测试**一致生效**，
+#      测试命中记 test_violations 且同样致 EXIT≠0；
+#   ③ informational 出网点 → 不参与 EXIT（仅列示）。
+# 若某文件**确实需要**原语 import（如测试要 monkeypatch `socket` 断言守卫），**必须**在此登记：
+#   path   = 相对仓库根、正斜杠路径；reason = 非空理由。
+# 未登记 / reason 为空的文件**一律仍判违规**；**不允许**注释式或魔法注释绕过。
+net_raw_import_exempt: []
+
+# ---------------- 本机 Ollama（离线兜底；provider: ollama 时启用） ----------------
 ollama:
   base_url: http://localhost:11434
   timeout_s: 300      # 生成整段求解脚本较慢，实测 120s 会截断长代码
@@ -10,12 +71,14 @@ ollama:
                       # message.thinking（实测 12k 字符后 done_reason=length，JSON 解析必失败），
                       # 本系统只取严格 JSON，故显式关闭思考
 
+# Ollama 分支的模型名（provider: ollama 时使用）
 models:
   generation: qwen3.5:latest      # 主生成模型
   fallback: qwen3.5:0.8b          # 降级模型（本机无 qwen3:4b，改用 0.8b）
   embedding: qwen3-embedding      # 向量模型（供 RAG 适配层使用）
 
 # 各角色：温度 / 单次 token 预算 / 单轮任务调用预算
+# （保留为默认；`<provider>.roles` 优先，供按后端微调预算）
 roles:
   archivist:
     temperature: 0.2

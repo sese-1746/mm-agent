@@ -37,14 +37,23 @@ def repair_once(prev_src: str, stderr_tail: str, regen_fn: RegenFn,
     每轮：拼错误上下文 → regen_fn(prev_src, context) → validate_script_ast。
     守卫不过时把违规并入上下文进入下一轮；轮次用尽抛 RepairError。
     注意：本函数不执行脚本（执行由调用方用 runner.run_script 负责）。
+
+    `max_rounds <= 0` 表示**未请求任何修复轮**：本函数**不调用 regen_fn**，
+    直接抛 `RepairError`（task-005 修正 N1：旧实现用 `max(1, max_rounds)` 把 0 抬成 1，
+    导致 `repair_rounds=0` 仍执行 1 轮修复，把首轮失败掩盖成成功）。
     """
     if not callable(regen_fn):
         raise TypeError("regen_fn 必须是可调用对象（由上层注入，如 agents.coder 的包装）")
 
+    rounds = int(max_rounds)
+    if rounds <= 0:
+        raise RepairError(
+            "max_rounds<=0：未请求任何修复轮（调用方应在 repair_rounds<=0 时跳过修复分支）")
+
     guard_error = ""
     last_src = prev_src
     last_error = stderr_tail or "（未提供 stderr）"
-    for _ in range(1, max(1, max_rounds) + 1):
+    for _ in range(1, rounds + 1):
         context = build_error_context(last_error, guard_error)
         new_src = regen_fn(last_src, context)
         if not isinstance(new_src, str) or not new_src.strip():
@@ -57,4 +66,4 @@ def repair_once(prev_src: str, stderr_tail: str, regen_fn: RegenFn,
             guard_error = str(exc)
             last_src, last_error = new_src, guard_error
     raise RepairError(
-        f"修复 {max_rounds} 轮后仍不可用：{guard_error or '守卫未通过'}")
+        f"修复 {rounds} 轮后仍不可用：{guard_error or '守卫未通过'}")

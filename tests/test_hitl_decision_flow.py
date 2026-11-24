@@ -16,9 +16,13 @@
 约束：只读被测实现，不改 `mmagent/`；CLI 用例用 `tmp_path` 隔离 `--ckpt`/`--db`；
 子进程用 `sys.executable` 绝对路径 + 超时保护。
 
-> 负向断言说明：`assert "stage:export" not in log` 用的是 **list 成员判断（精确相等）**，
-> 不是子串匹配 —— 否则 `"gate:pre_export_compliance=reject"` 里的 `export` 会造成误判。
+> 负向断言说明：`assert not any(x.startswith("stage:export") for x in log)` 覆盖 export 节点
+> 的**全部**日志形态（24 轮起有 `stage:export:skipped(…)` / `:ok(…)` / `:failed(…)` 三种），
+> 不再只排除精确相等的那一种；否则 `"gate:pre_export_compliance=reject"` 里的 `export`
+> 也会造成误判（子串匹配）。
 > 本文件对关键路径另外用**整表相等**断言，从根上避免该陷阱。
+> 注：export 节点的真实导出在 FR-12（`tools/export_tool.py`），无 `export_params` 时
+> log 为 `stage:export:skipped(no export params)`（"没导出不许说 DONE"）。
 """
 from __future__ import annotations
 
@@ -54,7 +58,8 @@ LOG_SKIP_TO_ASSEMBLE = [
     "gate:sanity_blocking=skip", "stage:render", "stage:assemble",
 ]
 LOG_REJECT = LOG_SKIP_TO_ASSEMBLE + ["gate:pre_export_compliance=reject", "stage:halt"]
-LOG_APPROVE = LOG_SKIP_TO_ASSEMBLE + ["gate:pre_export_compliance=approve", "stage:export"]
+LOG_APPROVE = LOG_SKIP_TO_ASSEMBLE + ["gate:pre_export_compliance=approve",
+                                     "stage:export:skipped(no export params)"]
 LOG_ABORT = [
     "stage:intake", "gate:caliber_conflict=skip", "stage:profile", "stage:plan", "stage:solve",
     "gate:sanity_blocking=abort", "stage:halt",
@@ -67,7 +72,7 @@ LOG_RERUN_2_HALT = LOG_RERUN_1 + ["gate:sanity_blocking=fix_and_rerun", "stage:h
 LOG_FULL_DONE = [
     "stage:intake", "gate:caliber_conflict=use_mapping", "stage:profile", "stage:plan",
     "stage:solve", "gate:sanity_blocking=accept", "stage:render", "stage:assemble",
-    "gate:pre_export_compliance=approve", "stage:export",
+    "gate:pre_export_compliance=approve", "stage:export:skipped(no export params)",
 ]
 
 
@@ -174,7 +179,8 @@ class TestDecisionDrivenFlow:
         assert st.gate is None
         assert st.log == LOG_REJECT, f"log 与契约不符：{st.log}"
         # list 成员判断 = 精确相等（非子串），避免 '...pre_export_compliance=reject' 误判
-        assert "stage:export" not in st.log, "reject 后不得执行 export 节点"
+        assert not any(x.startswith("stage:export") for x in st.log), \
+            "reject 后不得执行 export 节点"
 
     def test_sanity_abort_终止于HALTED且不进入render与assemble(self, coord: Coordinator):
         run_id = "abort-1"
@@ -185,7 +191,7 @@ class TestDecisionDrivenFlow:
         assert st.log == LOG_ABORT, f"log 与契约不符：{st.log}"
         assert "stage:render" not in st.log
         assert "stage:assemble" not in st.log
-        assert "stage:export" not in st.log
+        assert not any(x.startswith("stage:export") for x in st.log)
 
     def test_halt写hitl_run_halted事件且不写run_finished(self, coord: Coordinator, sandbox: Sandbox):
         run_id = "reject-evt-1"
@@ -226,7 +232,7 @@ class TestDecisionDrivenFlow:
             status = coord.resume(run_id, gate, decision)
         assert status is not None
         assert (status.done, status.halted, status.paused, status.stage) == (True, False, False, "DONE")
-        assert status.log[-1] == "stage:export"
+        assert status.log[-1] == "stage:export:skipped(no export params)"
         assert "stage:halt" not in status.log
 
     def test_三卡点全流程肯定裁定到达DONE(self, coord: Coordinator):

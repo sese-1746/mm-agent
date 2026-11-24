@@ -26,6 +26,9 @@ artifacts/runs/
 artifacts/tmp/
 *.tmp
 
+# ---- 验收/实验草稿区（证据留在磁盘上供复核，但一律不随产品交付、不入库）----
+/probe/
+
 # ---- 流程探针的可再生产物（PDF 副本 / 探针库 / 抽取出的图片，均可复跑重生成）----
 .agent-runs/**/probe/pdf/
 .agent-runs/**/probe/**/*.sqlite
@@ -45,3 +48,21 @@ artifacts/tmp/
 .DS_Store
 Thumbs.db
 desktop.ini
+
+# ---- 历年真题/论文素材（2026-10-19 第 24 轮）----
+# 目录合计 892,194,088 B（du -sh 854M）；其中 manifest 覆盖的 1380 个素材文件
+# = 733,637,993 B（10 真题 PDF + 69 附件 + 23 篇论文 1301 页扫描图），
+# _bundle/ 另有 157,634,704 B 官方原始 zip。体量不适合入库。
+# `manifest.json` 保留（离线可重建清单 + sha256 溯源），
+# 二进制由 `.agent-runs/2026-10-19/task-003/fetch_corpus.py` 重跑恢复（幂等）。
+artifacts/exam_corpus/exams/
+artifacts/exam_corpus/papers/
+artifacts/exam_corpus/_bundle/
+artifacts/exam_corpus/_assets.json
+artifacts/exam_corpus/fetch_report.json
+
+# ---- FR-4 向量索引（2026-10-22 第 36 轮）----
+# 生成物：`cli rag rebuild` 用同一份语料 + 同一模型**完整可复现**（manifest 里逐份
+# 记 sha256，vectors.jsonl 每行一块），故不入库（task-004 README §1「不入库」）。
+# 现规模：33 块 / dims 1024 / 约 780 KB。
+artifacts/rag/index/

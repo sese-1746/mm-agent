@@ -13,3 +13,5 @@
 *.xlsx binary
 *.db binary
 *.pdf binary
+# 离线依赖 wheel（第 27 轮起 vendoring 进 deploy/wheelhouse/，见 requirements.txt）
+*.whl binary

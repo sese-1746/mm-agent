@@ -5,8 +5,9 @@
   写库失败（如 WAL 锁竞争）重试 3 次、退避 100ms。
 - adopt_new_version：永不 UPDATE adopted 行（触发器强制），只 INSERT 新行；
   旧 adopted 版本通过 version_id 比较自然退位。
-- AdoptedVersionImmutableError：捕获触发器抛出的 IntegrityError 转换而来，
-  并写事件表 error_code='ADOPTED_IMMUTABLE'。
+- AdoptedVersionImmutableError：捕获触发器抛出的 IntegrityError 转换而来；
+  审计留痕（`events.error_code='ADOPTED_IMMUTABLE'`）由连接层
+  `store/db.py::_GuardedConnection` 统一补记（见该模块 docstring / ISSUE-FR9-03）。
 """
 from __future__ import annotations
 
@@ -16,7 +17,7 @@ import time
 import uuid
 from pathlib import Path
 
-from .db import DEFAULT_DB_PATH, connect, utcnow
+from .db import DEFAULT_DB_PATH, IMMUTABLE_TRIGGER_MSG, connect, utcnow
 
 DRAFT_KEEP = 5          # 草案最多保留最近 5 版
 MAX_RETRY = 3           # 写库重试次数
@@ -38,15 +39,15 @@ def _emit_event(conn: sqlite3.Connection, event_type: str, actor: str,
 
 def _convert_integrity(conn: sqlite3.Connection, exc: sqlite3.IntegrityError,
                        profile_id: str, version_id) -> None:
-    """触发器 'adopted immutable' → 领域异常 + 事件表记录。"""
-    if "adopted immutable" in str(exc):
-        try:
-            _emit_event(conn, "error", "store.profile",
-                        {"error_code": "ADOPTED_IMMUTABLE",
-                         "profile_id": profile_id, "version_id": version_id})
-            conn.commit()
-        except sqlite3.Error:
-            pass  # 事件写失败不掩盖主异常
+    """触发器 'adopted immutable' → 领域异常。
+
+    留痕（`events.error_code='ADOPTED_IMMUTABLE'`）自 2026-10-16（A7 / ISSUE-FR9-03）起
+    由**连接层**统一负责：`store/db.py::_GuardedConnection` 在 `execute`/`executemany` 捕获
+    `IntegrityError` 后补记（触发器内 `RAISE(ABORT)` 会回滚触发器自身的 INSERT，SQL 层无法留痕；
+    裸 SQL 路径也不经过本模块）。故此处**只做异常转换**，不再重复写事件
+    —— 否则一次违规会留下两条同义留痕。
+    """
+    if IMMUTABLE_TRIGGER_MSG in str(exc):
         raise AdoptedVersionImmutableError(
             f"profile {profile_id} v{version_id} 已 adopted，禁止修改/删除") from exc
     raise exc
@@ -175,6 +176,27 @@ def read_profile(profile_id: str, version: str | int = "last",
         }
     finally:
         conn.close()
+
+
+def list_versions(profile_id: str,
+                  db_path: str | Path = DEFAULT_DB_PATH) -> list[dict]:
+    """列出该档案的全部版本（按 `version_id` **降序**）。
+
+    每项固定 5 键：`version_id / status / actor / created_at / supersedes`。
+    档案**不存在**（该 `profile_id` 无任何行）时抛 `KeyError`（由路由层转 404）。
+    """
+    conn = connect(db_path)
+    try:
+        rows = conn.execute(
+            "SELECT version_id, status, actor, created_at, supersedes FROM profile_doc"
+            " WHERE profile_id = ? ORDER BY version_id DESC", (profile_id,)).fetchall()
+    finally:
+        conn.close()
+    if not rows:
+        raise KeyError(f"profile {profile_id} 不存在")
+    return [{"version_id": row["version_id"], "status": row["status"],
+             "actor": row["actor"], "created_at": row["created_at"],
+             "supersedes": row["supersedes"]} for row in rows]
 
 
 def try_update_row(profile_id: str, version_id: int,

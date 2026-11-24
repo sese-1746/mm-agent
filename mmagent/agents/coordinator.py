@@ -14,15 +14,18 @@
 
 ## 图结构（条件路由 + halt + 回边，修复轮 2）
 
-    START → intake → gate_caliber ─(→profile)→ profile → plan → solve → gate_sanity
+    START → intake → gate_caliber ─(→profile)→ profile → plan → gate_plan → solve
           ├─ accept ────────────────────────────────────────────────→ render → assemble
           │                                                              → gate_compliance
           ├─ fix_and_rerun ─(rerun_solve, 最多 MAX_RERUN 次)→ solve
           └─ abort ─────────────────────────────────────────────────→ halt → END
+    gate_plan ├─ accept → solve
+              ├─ reselect ─(回 plan，最多 MAX_RERUN 次)→ plan
+              └─ abort  → halt → END
     gate_compliance ├─ approve → export → END
                     └─ reject  → halt  → END
 
-- 三条卡点出边用 **`add_conditional_edges`**：裁定**驱动控制流**（不再"只记录不消费"）。
+- 四条卡点出边用 **`add_conditional_edges`**：裁定**驱动控制流**（不再"只记录不消费"）。
 - **`halt`** 是正常终态：`stage="HALTED"`、`halted=True`、`done=False`。
 - **回边上限**：`fix_and_rerun` 重入 `solve` 最多 `MAX_RERUN`(=1) 次，超限 → `halt`
   （依据课件 `07_Graph_Workflow 架构` P10 L786：条件路由设计缺陷会造成无限循环，必须给阈值）。
@@ -44,6 +47,22 @@
    非幂等写操作；`events` 留痕一律由 **driver**（`start()`/`resume()`）写，
    不在节点内写（含 `hitl.run_halted`）。
 4. 一个节点只放一个卡点（同节点多 `interrupt()` 会让节点执行 N+1 次）。
+
+## PLAN 卡点（第 4 个卡点，`gate_plan`）
+
+- 位置：`plan` → **`gate_plan`** → `solve`（`plan` 已由 `agents/planner.generate_plan()`
+  预先生成 `kind='plan'` 产物；coordinator 只**读**，**绝不**在节点内调 LLM）。
+- 无候选（无产物 / 文件缺失 / JSON 坏）→ **skip**（不卡死），但 `RunStatus.plan_candidates_missing`
+  会随 `to_dict()` 上屏（wire 第 10 键；检查点里也有 `plan_candidates_missing=True`）
+  —— 否则「PLAN 卡点为什么被跳过」对用户完全不可见，等于静默通过。
+  skip 路径**不写 log**（既有卡点的整表 log 断言是冻结语义），可见性由该字段承担。
+- `reselect` → 回 `plan`，**重新读一次产物**（最多 `MAX_RERUN` 次，超限 → `halt`）。
+  **注意：coordinator 不会重跑 planner**，回边读到的可能仍是同一份候选；真正的「重出候选」
+  必须由上层在 `resume()` 之前调用 `planner.generate_plan()`（分工见 planner 模块）。
+  回边时 `plan_selection_confirmed` **复位**为 False，否则重选后不再弹卡（卡点等于失效）。
+- `reselect` 之后候选消失（产物被删/损坏）→ **放行 `solve`**，不 halt：此时既无材料可审、
+  亦无候选可重选，halt 会把一次可恢复的产物丢失变成整轮中止（日志可追溯：
+  `stage:plan` 两次 + `gate:plan_selection=reselect`）。
 """
 from __future__ import annotations
 
@@ -57,13 +76,18 @@ from enum import Enum
 from pathlib import Path
 from typing import Annotated
 
-from typing_extensions import TypedDict
+from typing_extensions import NotRequired, TypedDict
 
 from langgraph.checkpoint.sqlite import SqliteSaver
 from langgraph.graph import END, START, StateGraph
 from langgraph.types import Command, interrupt
 
+from ..store.artifacts import list_artifacts
 from ..store.db import DEFAULT_DB_PATH, connect, utcnow
+
+# 仓库根（`agents/planner.py::REPO_ROOT` 同口径）：`artifacts.path` 默认是相对仓库根的
+# POSIX 路径，读取时要还原成可打开的真实路径。
+REPO_ROOT = Path(__file__).resolve().parents[2]
 
 # 检查点默认落在**独立**库：data/*.db 已在 .gitignore 内（天然不被提交），
 # 且与业务库 data/mm.db 隔离（避免污染 profile_doc 不可变触发器 / 写锁竞争）。
@@ -90,12 +114,14 @@ class Stage(str, Enum):
 GATE_CALIBER = "caliber_conflict"
 GATE_SANITY = "sanity_blocking"
 GATE_COMPLIANCE = "pre_export_compliance"
+GATE_PLAN = "plan_selection"   # 卡点 4：建模方法候选选型（PLAN → SOLVE 之间）
 
 # gate -> (必需取值键, 允许取值域)。resume 值形如 {"<key>": <域内值>, "note": <str>}。
 GATE_DECISION_SPEC: dict[str, tuple[str, frozenset[str]]] = {
     GATE_CALIBER: ("resolution", frozenset({"use_mapping", "keep_raw", "human_override"})),
     GATE_SANITY: ("decision", frozenset({"accept", "fix_and_rerun", "abort"})),
     GATE_COMPLIANCE: ("decision", frozenset({"approve", "reject"})),
+    GATE_PLAN: ("decision", frozenset({"accept", "reselect", "abort"})),
 }
 
 # 各卡点 payload 里的 stage（= interrupt 发生时所处阶段）
@@ -103,12 +129,14 @@ GATE_STAGE: dict[str, str] = {
     GATE_CALIBER: Stage.INTAKE.value,
     GATE_SANITY: Stage.SOLVE.value,
     GATE_COMPLIANCE: Stage.ASSEMBLE.value,
+    GATE_PLAN: Stage.PLAN.value,
 }
 
 GATE_QUESTION: dict[str, str] = {
     GATE_CALIBER: "存在口径冲突，需人工确认 field_mapping 建议后继续",
     GATE_SANITY: "合理性检查存在阻断项，需人工裁决后继续",
     GATE_COMPLIANCE: "导出前需人工确认 AI 使用披露与合规声明",
+    GATE_PLAN: "模型给出建模方法候选，需人工确认选型后继续",
 }
 
 # 各卡点待审材料在 context/state ``materials`` 里的键（review 的来源）
@@ -116,6 +144,7 @@ GATE_REVIEW_KEY: dict[str, str] = {
     GATE_CALIBER: "conflicts",           # 口径冲突明细
     GATE_SANITY: "sanity_items",         # 阻断项明细
     GATE_COMPLIANCE: "missing_disclosure",  # 缺失披露项
+    GATE_PLAN: "plan_candidates",        # 建模方法候选（planner 产物摘要）
 }
 
 
@@ -185,6 +214,14 @@ class CoordinatorGraphState(TypedDict):
     - `materials` 为 start() 传入的待审材料（用 `gate -> review` 填充 interrupt payload）；
     - `rerun_count` 记录 `fix_and_rerun` 已重入 solve 的次数（上限 `MAX_RERUN`）；
     - `sanity_resolved` 标记 sanity 卡点本轮是否已拿到裁定（重跑后复位，以便再次评审）；
+    - `plan_selection_confirmed` 标记 PLAN 卡点本轮是否已拿到裁定（`reselect` 后复位，
+      以便重选后**再次弹卡**）；`plan_rerun_count` 记录已重选次数（上限 `MAX_RERUN`）；
+    - `plan_candidates_missing` 标记「没有可审的建模候选」（无产物 / 文件缺失 / JSON 坏）：
+      此时 `gate_plan` **skip**（不卡死），该标记经 `status()` 对外可查；
+    - `db_path`（可选）台账库路径：`plan` 节点据此读 `kind='plan'` 产物（默认 `DEFAULT_DB_PATH`）。
+      由 `start()` 从 `Coordinator.db_path` 写入，保证「读哪个库」与 driver 一致；
+    - `export_params`（可选，FR-12）导出参数；缺省/空 → 导出节点标 `export_skipped`；
+    - `export_skipped`（可选）标记「走到 export 但没有导出参数」，防「没导出却说 DONE」；
     - 无 `messages`（本项目不需要）。
     """
     stage: str
@@ -196,8 +233,14 @@ class CoordinatorGraphState(TypedDict):
     materials: dict
     rerun_count: int
     sanity_resolved: bool
+    plan_selection_confirmed: bool
+    plan_rerun_count: int
+    plan_candidates_missing: bool
     halted_gate: str | None
     halted_decision: dict
+    db_path: NotRequired[str]
+    export_params: NotRequired[dict | None]
+    export_skipped: NotRequired[bool]
     log: Annotated[list, operator.add]
 
 
@@ -237,12 +280,90 @@ def _node_profile(state: CoordinatorGraphState) -> dict:
     return {"stage": Stage.PROFILE.value, "log": ["stage:profile"]}
 
 
+def _read_plan_candidates(db_path) -> dict | None:
+    """取最近一条 `kind='plan'` 产物并读其 JSON；**任何一步不可得 → None**。
+
+    - 只读：**不调 LLM**（候选必须由 `agents/planner.generate_plan()` 预先产出）；
+    - 六种「读不到」都收敛为 None：无产物行 / 无 path / 路径不可读 / JSON 坏 /
+      JSON 不是对象 / 库不可查（sqlite3.Error）。
+    """
+    try:
+        listing = list_artifacts(kind="plan", limit=1, db_path=db_path)
+        rows = listing.get("rows") or []
+        if not rows:
+            return None
+        raw_path = str(rows[0].get("path") or "")
+        if not raw_path:
+            return None
+        path = Path(raw_path)
+        if not path.is_absolute():          # artifacts.path 默认相对仓库根
+            path = REPO_ROOT / path
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (sqlite3.Error, OSError, ValueError):
+        # ValueError 覆盖 json.JSONDecodeError / UnicodeDecodeError
+        return None
+    if not isinstance(payload, dict):
+        return None
+    return {
+        "tasks": payload.get("tasks") or [],
+        "open_questions": payload.get("open_questions") or [],
+        "artifact_path": str(path),
+        # planner 的质量三标（第 27 轮契约 `planner@0.2.0`+）：**只呈现、不否决**。
+        # 人工必须在 review 里看见「这份候选有没有做过反造假 / 是否够格进卡点」，
+        # 否则 `fabrication_check="skipped"`（题面为空、数字未经校验）就是静默放行。
+        # 老产物没有这些键时保留 None（= planner 未提供，不臆造成 False/True）。
+        "valid": payload.get("valid"),
+        "ready_for_gate": payload.get("ready_for_gate"),
+        "fabrication_check": payload.get("fabrication_check"),
+    }
+
+
 def _node_plan(state: CoordinatorGraphState) -> dict:
-    return {"stage": Stage.PLAN.value, "log": ["stage:plan"]}
+    """PLAN 阶段：**只读**最近一条 plan 产物，把候选放进 `materials['plan_candidates']`。
+
+    读不到 → `plan_candidates_missing=True` 且材料留空 dict（不是 None）；
+    `gate_plan` 会据此 skip。log 保持 `stage:plan` 不变（冻结既有整表 log 断言）。
+    """
+    candidates = _read_plan_candidates(state.get("db_path") or DEFAULT_DB_PATH)
+    materials = {**(state.get("materials") or {})}
+    if not candidates:
+        materials[GATE_REVIEW_KEY[GATE_PLAN]] = {}
+        return {"stage": Stage.PLAN.value, "plan_candidates_missing": True,
+                "materials": materials, "log": ["stage:plan"]}
+    materials[GATE_REVIEW_KEY[GATE_PLAN]] = candidates
+    return {"stage": Stage.PLAN.value, "plan_candidates_missing": False,
+            "materials": materials, "log": ["stage:plan"]}
 
 
 def _node_solve(state: CoordinatorGraphState) -> dict:
     return {"stage": Stage.SOLVE.value, "log": ["stage:solve"]}
+
+
+def _node_gate_plan(state: CoordinatorGraphState) -> dict:
+    """卡点 4：建模方法候选选型 → interrupt。裁定驱动去向（accept/reselect/abort）。
+
+    与 `gate_sanity` 同构，但有一处**必须**的差异：`reselect` 既要把计数 +1，又要
+    **复位** `plan_selection_confirmed`（否则重选后不再弹卡，卡点等于失效）。
+    无候选（`plan_candidates_missing`）时**skip**：没有材料可审的卡点不该把人卡死。
+    """
+    if not state.get("plan_selection_confirmed") and not state.get("plan_candidates_missing"):
+        decision = interrupt({
+            "gate": GATE_PLAN,
+            "stage": GATE_STAGE[GATE_PLAN],
+            "question": GATE_QUESTION[GATE_PLAN],
+            "review": _review(state, GATE_PLAN),
+        })
+        value = decision.get("decision")
+        update = {
+            "plan_selection_confirmed": value != "reselect",
+            "decisions": {**state.get("decisions", {}), GATE_PLAN: decision},
+            "log": [f"gate:{GATE_PLAN}={value}"],
+        }
+        if value == "reselect":
+            update["plan_rerun_count"] = int(state.get("plan_rerun_count", 0)) + 1
+        return update
+    # skip 路径不写日志：`stage:plan` / 既有卡点 log 序列是冻结语义（整表断言在测）。
+    return {"log": []}
 
 
 def _node_gate_sanity(state: CoordinatorGraphState) -> dict:
@@ -297,7 +418,27 @@ def _node_gate_compliance(state: CoordinatorGraphState) -> dict:
 
 
 def _node_export(state: CoordinatorGraphState) -> dict:
-    return {"stage": Stage.DONE.value, "log": ["stage:export"]}
+    """FR-12 导出节点：**三态**，绝不「什么都没导出却标 DONE」。
+
+    - 有 `export_params`：真调 `tools/export_tool.build_deliverable(**export_params)`；
+      成功 → `DONE`；任何异常（闸阻断/写盘失败/参数错）→ `HALTED` + `halted_gate="export"`。
+    - 无 `export_params`：`DONE` + `export_skipped=True`，log 明确写 skipped
+      —— `done=True` 仍然成立（图跑到终点了），但账上不再假装「已导出」。
+    """
+    params = state.get("export_params")
+    if not params:
+        return {"stage": Stage.DONE.value, "export_skipped": True,
+                "log": ["stage:export:skipped(no export params)"]}
+
+    from ..tools import export_tool
+
+    try:
+        result = export_tool.build_deliverable(**params)
+    except Exception as exc:  # noqa: BLE001 —— 任何导出失败都不得回 DONE
+        return {"stage": Stage.HALTED.value, "halted_gate": "export",
+                "log": [f"stage:export:failed({type(exc).__name__}: {exc})"]}
+    return {"stage": Stage.DONE.value, "export_skipped": False,
+            "log": [f"stage:export:ok(files={len(result.get('files') or [])})"]}
 
 
 def _node_halt(state: CoordinatorGraphState) -> dict:
@@ -313,6 +454,11 @@ def _node_halt(state: CoordinatorGraphState) -> dict:
         if gate == GATE_SANITY and value in ("abort", "fix_and_rerun"):
             halted_gate = gate
             break
+    if halted_gate is None:
+        # 卡点 4：abort，或 reselect 超过 MAX_RERUN（`_route_plan` 已判定无路可回）
+        plan_decision = decisions.get(GATE_PLAN) or {}
+        if plan_decision.get("decision") in ("abort", "reselect"):
+            halted_gate = GATE_PLAN
     return {
         "stage": Stage.HALTED.value,
         "halted_gate": halted_gate,
@@ -342,6 +488,31 @@ def _route_sanity(state: CoordinatorGraphState) -> str:
     return "halt"
 
 
+def _route_plan(state: CoordinatorGraphState) -> str:
+    """PLAN 选型裁定 → 去向：accept→solve，reselect→plan（有上限），abort→halt。
+
+    - 无裁定（卡点 skip：无候选 / 已确认）→ 放行 solve；
+    - `reselect` 与 `MAX_RERUN` 联动（防无限刷 planner）：`plan_rerun_count` 由
+      `_node_gate_plan` 在**每次 reselect 时** +1，故「已用次数 > MAX_RERUN」→ halt。
+      等价于 sanity 回边的「只有 MAX_RERUN 次机会」（那里计数在路由**之后**的
+      `rerun_solve` 里 +1，因此用 `>=`；此处计数在路由**之前**已 +1，故用 `>`）。
+    - 重选后候选消失（`plan_candidates_missing`）→ 无处可回，放行 solve，**不死循环**；
+    - 其他取值 → `InvalidGateDecision`（`resume()` 已先校验，这是兜底不是主路径）。
+    """
+    decision = (state.get("decisions", {}).get(GATE_PLAN) or {}).get("decision")
+    if decision in (None, "accept"):
+        return "solve"
+    if decision == "abort":
+        return "halt"
+    if decision == "reselect":
+        if state.get("plan_candidates_missing"):
+            return "solve"
+        if int(state.get("plan_rerun_count", 0)) > MAX_RERUN:
+            return "halt"
+        return "plan"
+    raise InvalidGateDecision(GATE_PLAN, f"未知裁定 decision={decision!r}")
+
+
 def _route_compliance(state: CoordinatorGraphState) -> str:
     """合规裁定 → 去向。卡点被 skip（compliance_confirmed=True）时无裁定 → 放行 export。"""
     decision = (state.get("decisions", {}).get(GATE_COMPLIANCE) or {}).get("decision")
@@ -355,6 +526,7 @@ def _build_graph(checkpointer):
     builder.add_node("gate_caliber", _node_gate_caliber)
     builder.add_node("profile", _node_profile)
     builder.add_node("plan", _node_plan)
+    builder.add_node("gate_plan", _node_gate_plan)
     builder.add_node("solve", _node_solve)
     builder.add_node("gate_sanity", _node_gate_sanity)
     builder.add_node("rerun_solve", _node_rerun_solve)
@@ -368,7 +540,12 @@ def _build_graph(checkpointer):
     builder.add_edge("intake", "gate_caliber")
     builder.add_conditional_edges("gate_caliber", _route_caliber, {"profile": "profile"})
     builder.add_edge("profile", "plan")
-    builder.add_edge("plan", "solve")
+    builder.add_edge("plan", "gate_plan")
+    builder.add_conditional_edges("gate_plan", _route_plan, {
+        "solve": "solve",
+        "plan": "plan",
+        "halt": "halt",
+    })
     builder.add_edge("solve", "gate_sanity")
     builder.add_conditional_edges("gate_sanity", _route_sanity, {
         "render": "render",
@@ -416,6 +593,14 @@ class RunStatus:
     log: list = field(default_factory=list)
     halted: bool = False               # True=已按裁定中止（正常终态，stage=HALTED）
     review: dict | list | None = None  # paused=True 时的待审材料（无材料时为空容器）
+    # True=没有可审的建模候选（gate_plan 已 skip）。进 `to_dict()`：PLAN 卡点被跳过时
+    # 用户必须能看出「为什么跳过」（wire 格式因此由 9 键演进为 10 键，快照已同步）。
+    plan_candidates_missing: bool = False
+    # True=走到了 export 节点但 context 没给 `export_params`，于是**没导出却 DONE**。
+    # 第 28 轮加入 wire（D-93）：`done=True` 与 `export_skipped=True` 同时成立是
+    # **正常终态**（图跑到终点了），但调用方必须能分辨「跑完了且导出了」与
+    # 「跑完了什么都没导出」——否则前端只能显示「已完成」，用户会以为交付物已生成。
+    export_skipped: bool = False
 
     def to_dict(self) -> dict:
         return {
@@ -428,6 +613,10 @@ class RunStatus:
             "halted": self.halted,
             "review": self.review,
             "log": list(self.log),
+            "plan_candidates_missing": self.plan_candidates_missing,
+            # 第 28 轮（D-93）：新增键一律**追加到末尾**，不插队、不改既有顺序，
+            # 免得已经按老顺序读的调用方（含前端渲染）错位。
+            "export_skipped": self.export_skipped,
         }
 
 
@@ -519,7 +708,9 @@ class Coordinator:
         halted = (not paused) and stage == Stage.HALTED.value
         return RunStatus(run_id=run_id, stage=stage, paused=paused, gate=gate,
                          question=question, done=done, log=log, halted=halted,
-                         review=review)
+                         review=review,
+                         plan_candidates_missing=bool(values.get("plan_candidates_missing")),
+                         export_skipped=bool(values.get("export_skipped")))
 
     def _read_status(self, run_id: str) -> RunStatus:
         return self._status_from(run_id, self._snapshot(run_id))
@@ -606,8 +797,14 @@ class Coordinator:
             "materials": materials,
             "rerun_count": 0,
             "sanity_resolved": False,
+            "plan_selection_confirmed": bool(context.get("plan_selection_confirmed", False)),
+            "plan_rerun_count": 0,
+            "plan_candidates_missing": False,
             "halted_gate": None,
             "halted_decision": {},
+            "db_path": str(self.db_path),   # plan 节点据此读 kind='plan' 产物
+            "export_params": context.get("export_params"),
+            "export_skipped": False,
             "log": [],
         }
         trace = uuid.uuid4().hex
