@@ -13,6 +13,13 @@
 
 业务节点由 Python 和 LangGraph 编排，前端负责操作与状态展示。此项目可用于展示代码式工作流和 RAG 实现。
 
+## 界面截图
+
+- [数模工作台](docs/mm-agent-paper.png)
+- [RAG 概念问答](docs/mm-agent-concept.png)
+
+截图展示现有前端页面。运行问答需要本地服务、已构建索引和模型。
+
 ## 本地运行
 
 使用 Python 3.13。安装依赖后，把 `config/models.yaml` 中的 `provider` 改为 `ollama`，并确认本机 Ollama 已运行。按配置下载嵌入模型和生成模型。使用 DashScope 时，从环境变量设置 `DASHSCOPE_API_KEY`，并选择账户可用的模型。
@@ -45,3 +52,7 @@ python -m mmagent.cli rag search "线性规划建模先定义什么？" --k 2 --
 - [问答页面](frontend/assets/views/concept.js)
 
 这是从本地已提交版本整理的作品集快照，附带示例语料。运行生成的数据库和向量索引由使用者在本地重建。
+
+## 本次验证
+
+对本地快照执行人机确认、语料提取和前端模块等定向测试，结果为 61 项通过、8 项跳过、5 项失败。前端失败项集中在历史视图清单、路由和接口断言。真实模型问答未在本次发布中端到端复测。
